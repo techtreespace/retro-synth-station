@@ -1,13 +1,14 @@
-// Loop Station Engine — 4 loop slots with recording, playback, overdub, and master recording
+// Loop Station Engine — 4 loop slots with clean state machine
 
-export type LoopSlotStatus = 'empty' | 'recording' | 'playing' | 'stopped' | 'overdubbing';
+export type SlotState = 'empty' | 'recording' | 'recorded' | 'playing';
 
 export interface LoopSlot {
-  status: LoopSlotStatus;
+  state: SlotState;
+  isOverdub: boolean; // true when recording over existing buffer
   buffer: AudioBuffer | null;
   bars: 1 | 2 | 4 | 8;
   volume: number;
-  waveformData: number[]; // normalized amplitude bars for display
+  waveformData: number[];
 }
 
 export class LooperEngine {
@@ -21,6 +22,9 @@ export class LooperEngine {
   private slotRecordBuffers: Float32Array[][] = [[], [], [], []];
   private slotLoopTimers: (number | null)[] = [null, null, null, null];
   private slotRecordTimers: (number | null)[] = [null, null, null, null];
+  private slotCountInTimers: (number | null)[] = [null, null, null, null];
+  private slotPendingRecord: boolean[] = [false, false, false, false]; // track if waiting for count-in
+  private slotPreRecordState: SlotState[] = ['empty', 'empty', 'empty', 'empty'];
 
   // Master recording
   private masterRecorder: MediaRecorder | null = null;
@@ -29,16 +33,15 @@ export class LooperEngine {
   private masterRecording = false;
   private masterRecordStart = 0;
 
-  // (captureStreamDest removed — slot recording uses ScriptProcessorNode for raw PCM)
-
   // Metronome
   private metronomeEnabled = false;
   private metronomeGain: GainNode | null = null;
 
-  // BPM
+  // BPM & sync
   private bpm = 120;
   private syncToBpm = true;
-  private sequencerStartTime = 0; // AudioContext time when sequencer started
+  private sequencerStartTime = 0;
+  private sequencerPlaying = false;
 
   // Callbacks
   private onSlotChange: ((slotIndex: number, slot: LoopSlot) => void) | null = null;
@@ -47,7 +50,8 @@ export class LooperEngine {
 
   constructor() {
     this.slots = Array.from({ length: 4 }, () => ({
-      status: 'empty' as LoopSlotStatus,
+      state: 'empty' as SlotState,
+      isOverdub: false,
       buffer: null,
       bars: 2 as 1 | 2 | 4 | 8,
       volume: 0.8,
@@ -60,21 +64,19 @@ export class LooperEngine {
     this.destination = dest;
     this.synthMasterGain = synthMasterGain || null;
 
-    // Slot recording now uses ScriptProcessorNode directly on synthMasterGain
-
-    // Create master stream destination for master recording
+    // Master stream destination for master recording
     this.masterStreamDest = ctx.createMediaStreamDestination();
     if (this.synthMasterGain) {
       this.synthMasterGain.connect(this.masterStreamDest);
     }
 
-    // Create metronome gain
+    // Metronome gain
     this.metronomeGain = ctx.createGain();
     this.metronomeGain.gain.value = 0.3;
     this.metronomeGain.connect(dest);
     this.metronomeGain.connect(this.masterStreamDest);
 
-    // Create slot gains
+    // Slot gains
     for (let i = 0; i < 4; i++) {
       const gain = ctx.createGain();
       gain.gain.value = this.slots[i].volume;
@@ -94,6 +96,7 @@ export class LooperEngine {
   setMetronomeEnabled(enabled: boolean): void { this.metronomeEnabled = enabled; }
   isMetronomeEnabled(): boolean { return this.metronomeEnabled; }
   setSequencerStartTime(time: number): void { this.sequencerStartTime = time; }
+  setSequencerPlaying(playing: boolean): void { this.sequencerPlaying = playing; }
 
   private getNextBarTime(): number {
     if (!this.ctx) return 0;
@@ -108,19 +111,23 @@ export class LooperEngine {
 
   setSlotBars(index: number, bars: 1 | 2 | 4 | 8): void {
     this.slots[index].bars = bars;
-    this.onSlotChange?.(index, { ...this.slots[index] });
+    this.emitSlot(index);
   }
 
   setSlotVolume(index: number, volume: number): void {
     this.slots[index].volume = volume;
-    if (this.slotGains[index]) {
-      this.slotGains[index]!.gain.setTargetAtTime(volume, this.ctx!.currentTime, 0.01);
+    if (this.slotGains[index] && this.ctx) {
+      this.slotGains[index]!.gain.setTargetAtTime(volume, this.ctx.currentTime, 0.01);
     }
+    this.emitSlot(index);
+  }
+
+  private emitSlot(index: number): void {
     this.onSlotChange?.(index, { ...this.slots[index] });
   }
 
   private getBarDuration(): number {
-    return (60 / this.bpm) * 4; // 4 beats per bar
+    return (60 / this.bpm) * 4;
   }
 
   private playMetronomeClick(time: number, isDownbeat: boolean): void {
@@ -137,72 +144,132 @@ export class LooperEngine {
     osc.stop(time + 0.06);
   }
 
-  async startSlotRecording(index: number): Promise<void> {
+  // ─── STATE MACHINE ───────────────────────────────────────────────
+
+  /**
+   * Main REC button handler — implements strict state transitions:
+   * EMPTY    → count-in (if seq stopped) or sync to bar → RECORDING
+   * RECORDED → count-in (if seq stopped) or sync to bar → RECORDING (overdub)
+   * PLAYING  → immediate overdub (already in sync) → RECORDING (overdub, continues playing after)
+   * RECORDING → cancel → previous state
+   */
+  handleRecButton(index: number): void {
+    const slot = this.slots[index];
+
+    switch (slot.state) {
+      case 'empty':
+        this.slotPreRecordState[index] = 'empty';
+        this.initiateRecording(index, false);
+        break;
+
+      case 'recorded':
+        this.slotPreRecordState[index] = 'recorded';
+        this.initiateRecording(index, true);
+        break;
+
+      case 'playing':
+        // Immediate overdub — already in sync, no count-in needed
+        this.slotPreRecordState[index] = 'playing';
+        this.beginActualRecording(index, true);
+        break;
+
+      case 'recording':
+        // Cancel recording
+        this.cancelRecording(index);
+        break;
+    }
+  }
+
+  /**
+   * Initiate recording with optional count-in.
+   * Count-in only when sequencer is NOT playing.
+   * If sequencer IS playing, sync to next bar automatically.
+   */
+  private initiateRecording(index: number, isOverdub: boolean): void {
+    if (!this.ctx || !this.synthMasterGain) return;
+
+    if (this.sequencerPlaying && this.syncToBpm) {
+      // Sequencer playing — skip count-in, sync to next bar
+      const nextBar = this.getNextBarTime();
+      const delay = Math.max(0, (nextBar - this.ctx.currentTime) * 1000);
+
+      this.slotPendingRecord[index] = true;
+      this.emitSlot(index); // UI can show "waiting" state
+
+      this.slotCountInTimers[index] = window.setTimeout(() => {
+        this.slotPendingRecord[index] = false;
+        if (this.slots[index].state === 'empty' || this.slots[index].state === 'recorded') {
+          this.beginActualRecording(index, isOverdub);
+        }
+      }, delay);
+    } else {
+      // No sequencer — do 4-beat count-in
+      this.doCountIn(index, () => {
+        this.beginActualRecording(index, isOverdub);
+      });
+    }
+  }
+
+  private doCountIn(index: number, onComplete: () => void): void {
+    if (!this.ctx) return;
+    const beatDuration = 60 / this.bpm;
+    const now = this.ctx.currentTime;
+    this.slotPendingRecord[index] = true;
+
+    for (let i = 0; i < 4; i++) {
+      const clickTime = now + i * beatDuration;
+      this.playMetronomeClick(clickTime, i === 0);
+      const beatNum = i + 1;
+      setTimeout(() => {
+        this.onCountIn?.(beatNum);
+      }, i * beatDuration * 1000);
+    }
+
+    // After 4 beats, start recording
+    const totalDelay = 4 * beatDuration * 1000;
+    this.slotCountInTimers[index] = window.setTimeout(() => {
+      this.slotPendingRecord[index] = false;
+      this.onCountIn?.(0); // clear count-in display
+      onComplete();
+    }, totalDelay);
+  }
+
+  private beginActualRecording(index: number, isOverdub: boolean): void {
     if (!this.ctx || !this.synthMasterGain) return;
 
     const slot = this.slots[index];
-    const isOverdub = slot.buffer !== null;
 
-    // Schedule recording to start at the next bar boundary
-    const beatDuration = 60 / this.bpm;
-    const nextBar = this.syncToBpm ? this.getNextBarTime() : this.ctx.currentTime + 4 * beatDuration;
-    const now = this.ctx.currentTime;
-    const waitUntilBar = nextBar - now;
-
-    // Count-in clicks leading up to next bar
-    const beatsUntilBar = Math.round(waitUntilBar / beatDuration);
-    const countInBeats = Math.min(beatsUntilBar, 4);
-    const countInStart = nextBar - countInBeats * beatDuration;
-
-    for (let i = 0; i < countInBeats; i++) {
-      const clickTime = countInStart + i * beatDuration;
-      if (clickTime >= now) {
-        this.playMetronomeClick(clickTime, i === 0);
-        setTimeout(() => {
-          this.onCountIn?.(i + 1);
-        }, (clickTime - now) * 1000);
-      }
-    }
-
-    const recordDuration = this.getBarDuration() * slot.bars;
-
-    // Wait until the next bar boundary
-    await new Promise(resolve => setTimeout(resolve, waitUntilBar * 1000));
-
-    if (!this.ctx) return;
-
-    // Use ScriptProcessorNode to capture raw PCM — SILENT tap only (no pass-through)
+    // Set up ScriptProcessorNode for raw PCM capture (silent tap)
     const bufferSize = 4096;
     const processor = this.ctx.createScriptProcessor(bufferSize, 2, 2);
     this.slotRecordBuffers[index] = [];
 
     processor.onaudioprocess = (e) => {
-      // Capture left channel only
       const inputL = e.inputBuffer.getChannelData(0);
       this.slotRecordBuffers[index].push(new Float32Array(inputL));
-      // Output silence — do NOT pass through to avoid double monitoring
+      // Output silence to prevent double monitoring
       for (let ch = 0; ch < e.outputBuffer.numberOfChannels; ch++) {
         e.outputBuffer.getChannelData(ch).fill(0);
       }
     };
 
-    // Connect: synthMasterGain → processor → destination
-    // Processor outputs silence so no double audio, but must connect to destination
-    // for ScriptProcessorNode to actually fire onaudioprocess
     this.synthMasterGain.connect(processor);
     processor.connect(this.ctx.destination);
     this.slotRecordProcessors[index] = processor;
 
-    this.slots[index].status = isOverdub ? 'overdubbing' : 'recording';
-    this.onSlotChange?.(index, { ...this.slots[index] });
+    // Transition to RECORDING
+    slot.state = 'recording';
+    slot.isOverdub = isOverdub;
+    this.emitSlot(index);
 
-    // Auto-stop after loop length
+    // Auto-stop after selected bar length
+    const recordDuration = this.getBarDuration() * slot.bars;
     this.slotRecordTimers[index] = window.setTimeout(() => {
-      this.stopSlotRecording(index);
+      this.finishRecording(index);
     }, recordDuration * 1000);
   }
 
-  stopSlotRecording(index: number): void {
+  private finishRecording(index: number): void {
     if (!this.ctx) return;
 
     // Clear timer
@@ -221,11 +288,13 @@ export class LooperEngine {
       this.slotRecordProcessors[index] = null;
     }
 
-    // Build AudioBuffer from captured PCM chunks
+    // Build AudioBuffer from captured PCM
     const chunks = this.slotRecordBuffers[index];
     if (chunks.length === 0) {
-      this.slots[index].status = this.slots[index].buffer ? 'stopped' : 'empty';
-      this.onSlotChange?.(index, { ...this.slots[index] });
+      // Nothing captured — revert to previous state
+      this.slots[index].state = this.slotPreRecordState[index];
+      this.slots[index].isOverdub = false;
+      this.emitSlot(index);
       return;
     }
 
@@ -241,39 +310,78 @@ export class LooperEngine {
     newBuffer.getChannelData(0).set(merged);
 
     const slot = this.slots[index];
-    if (slot.buffer) {
-      // Overdub: mix existing + new
-      this.slots[index].buffer = this.mixBuffers(slot.buffer, newBuffer);
+    if (slot.isOverdub && slot.buffer) {
+      slot.buffer = this.mixBuffers(slot.buffer, newBuffer);
     } else {
-      this.slots[index].buffer = newBuffer;
+      slot.buffer = newBuffer;
     }
 
-    this.slots[index].waveformData = this.extractWaveform(this.slots[index].buffer!, 64);
-    this.slots[index].status = 'stopped';
+    slot.waveformData = this.extractWaveform(slot.buffer!, 64);
+    slot.isOverdub = false;
     this.slotRecordBuffers[index] = [];
-    this.onSlotChange?.(index, { ...this.slots[index] });
+
+    // Transition: if was playing before overdub, go back to playing
+    if (this.slotPreRecordState[index] === 'playing') {
+      slot.state = 'playing';
+      this.emitSlot(index);
+      // Restart playback with updated buffer
+      this.startSlotPlayback(index);
+    } else {
+      slot.state = 'recorded';
+      this.emitSlot(index);
+    }
   }
+
+  private cancelRecording(index: number): void {
+    // Clear pending timers
+    if (this.slotCountInTimers[index] !== null) {
+      clearTimeout(this.slotCountInTimers[index]!);
+      this.slotCountInTimers[index] = null;
+    }
+    if (this.slotRecordTimers[index] !== null) {
+      clearTimeout(this.slotRecordTimers[index]!);
+      this.slotRecordTimers[index] = null;
+    }
+
+    // Disconnect processor
+    const processor = this.slotRecordProcessors[index];
+    if (processor) {
+      try { processor.disconnect(); } catch {}
+      if (this.synthMasterGain) {
+        try { this.synthMasterGain.disconnect(processor); } catch {}
+      }
+      this.slotRecordProcessors[index] = null;
+    }
+
+    this.slotPendingRecord[index] = false;
+    this.slotRecordBuffers[index] = [];
+
+    // Revert to previous state
+    this.slots[index].state = this.slotPreRecordState[index];
+    this.slots[index].isOverdub = false;
+    this.emitSlot(index);
+    this.onCountIn?.(0);
+  }
+
+  // ─── PLAYBACK ─────────────────────────────────────────────────────
 
   startSlotPlayback(index: number): void {
     if (!this.ctx || !this.slots[index].buffer || !this.slotGains[index]) return;
 
-    // Always stop any existing playback first
     this.stopSlotPlayback(index);
 
-    this.slots[index].status = 'playing';
-    this.onSlotChange?.(index, { ...this.slots[index] });
+    this.slots[index].state = 'playing';
+    this.emitSlot(index);
 
     const scheduleLoop = () => {
-      if (!this.ctx || !this.slots[index].buffer || this.slots[index].status !== 'playing') return;
+      if (!this.ctx || !this.slots[index].buffer || this.slots[index].state !== 'playing') return;
 
-      // Create a fresh AudioBufferSourceNode each time (they are one-shot)
       const source = this.ctx.createBufferSource();
       source.buffer = this.slots[index].buffer;
       source.connect(this.slotGains[index]!);
 
-      // Calculate start time synced to BPM using sequencer start reference
       let startTime = this.ctx.currentTime;
-      if (this.syncToBpm) {
+      if (this.syncToBpm && this.sequencerPlaying) {
         const nextBar = this.getNextBarTime();
         startTime = Math.max(nextBar, this.ctx.currentTime + 0.01);
       }
@@ -281,17 +389,12 @@ export class LooperEngine {
       source.start(startTime);
       this.slotSources[index] = source;
 
-      // Schedule next loop iteration
       const bufferDuration = source.buffer!.duration;
       const delay = (startTime - this.ctx.currentTime + bufferDuration) * 1000;
 
       this.slotLoopTimers[index] = window.setTimeout(() => {
         scheduleLoop();
       }, delay);
-
-      source.onended = () => {
-        // Cleanup reference if this source is still the active one
-      };
     };
 
     scheduleLoop();
@@ -306,14 +409,14 @@ export class LooperEngine {
       try { this.slotSources[index]!.stop(); } catch {}
       this.slotSources[index] = null;
     }
-    if (this.slots[index].status === 'playing') {
-      this.slots[index].status = 'stopped';
-      this.onSlotChange?.(index, { ...this.slots[index] });
+    if (this.slots[index].state === 'playing') {
+      this.slots[index].state = 'recorded';
+      this.emitSlot(index);
     }
   }
 
   toggleSlotPlayback(index: number): void {
-    if (this.slots[index].status === 'playing') {
+    if (this.slots[index].state === 'playing') {
       this.stopSlotPlayback(index);
     } else if (this.slots[index].buffer) {
       this.startSlotPlayback(index);
@@ -322,15 +425,16 @@ export class LooperEngine {
 
   clearSlot(index: number): void {
     this.stopSlotPlayback(index);
-    this.stopSlotRecording(index);
+    this.cancelRecording(index);
     this.slots[index] = {
-      status: 'empty',
+      state: 'empty',
+      isOverdub: false,
       buffer: null,
       bars: this.slots[index].bars,
       volume: this.slots[index].volume,
       waveformData: [],
     };
-    this.onSlotChange?.(index, { ...this.slots[index] });
+    this.emitSlot(index);
   }
 
   stopAllSlots(): void {
@@ -340,14 +444,11 @@ export class LooperEngine {
   }
 
   resumeActiveSlots(): void {
-    for (let i = 0; i < 4; i++) {
-      if (this.slots[i].buffer && this.slots[i].status === 'stopped') {
-        // Only resume slots that were previously playing — we track this externally
-      }
-    }
+    // reserved for future use
   }
 
-  // Master Recording
+  // ─── MASTER RECORDING ────────────────────────────────────────────
+
   startMasterRecording(): void {
     if (!this.ctx || !this.masterStreamDest || this.masterRecording) return;
 
@@ -372,7 +473,6 @@ export class LooperEngine {
     this.masterRecording = true;
     this.masterRecordStart = Date.now();
     recorder.start(250);
-
     this.onMasterRecordingChange?.(true, 0);
   }
 
@@ -451,7 +551,6 @@ export class LooperEngine {
       }
       waveform.push(sum / blockSize);
     }
-    // Normalize
     const max = Math.max(...waveform, 0.001);
     return waveform.map(v => v / max);
   }
@@ -460,7 +559,7 @@ export class LooperEngine {
     this.stopAllSlots();
     this.stopMasterRecording();
     for (let i = 0; i < 4; i++) {
-      this.stopSlotRecording(i);
+      this.cancelRecording(i);
       this.slotGains[i]?.disconnect();
     }
     this.metronomeGain?.disconnect();
