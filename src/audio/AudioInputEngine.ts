@@ -35,6 +35,9 @@ export class AudioInputEngine {
   private stream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private highpassFilter: BiquadFilterNode | null = null;
+  private lowEQ: BiquadFilterNode | null = null;
+  private midEQ: BiquadFilterNode | null = null;
+  private highEQ: BiquadFilterNode | null = null;
   private inputGainNode: GainNode | null = null;
   private muteGainNode: GainNode | null = null;
   private analyser: AnalyserNode | null = null;
