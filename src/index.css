@@ -76,12 +76,18 @@
     @apply border-border;
   }
 
+  * {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+
   body {
     @apply bg-background text-foreground font-sans;
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
     overscroll-behavior: none;
+    touch-action: manipulation;
   }
 }
 
