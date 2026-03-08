@@ -47,15 +47,17 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
     }
   }, []);
 
-  // Ensure audio context is connected
+  // Ensure audio context is connected — use synth's shared AudioContext
   const ensureSeqInit = useCallback(async () => {
     await ensureInit();
-    if (!initedRef.current && seqRef.current) {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      seqRef.current.init(ctx);
-      initedRef.current = true;
+    if (!initedRef.current && seqRef.current && synthEngine) {
+      const ctx = synthEngine.getAudioContext();
+      if (ctx) {
+        seqRef.current.init(ctx);
+        initedRef.current = true;
+      }
     }
-  }, [ensureInit]);
+  }, [ensureInit, synthEngine]);
 
   // Sync params to engine
   useEffect(() => {
