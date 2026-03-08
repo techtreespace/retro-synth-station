@@ -56,6 +56,9 @@ export class AudioInputEngine {
     selectedDeviceId: null,
     permissionDenied: false,
     noDevice: false,
+    eqLow: 0,
+    eqMid: 0,
+    eqHigh: 0,
   };
 
   private onStateChange: StateCallback | null = null;
