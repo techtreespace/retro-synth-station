@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SynthEngine, SynthParams, SynthType } from '@/audio/SynthEngine';
+import { LooperEngine } from '@/audio/LooperEngine';
 import { DEFAULT_PARAMS, PRESETS, Preset } from '@/audio/presets';
 import Knob from '@/components/synth/Knob';
 import WheelControl from '@/components/synth/WheelControl';
@@ -10,6 +11,8 @@ import LFOSection from '@/components/synth/LFOSection';
 import PresetSelector from '@/components/synth/PresetSelector';
 import Keyboard from '@/components/synth/Keyboard';
 import SequencerSection from '@/components/synth/SequencerSection';
+import LooperSection from '@/components/synth/LooperSection';
+import { Circle } from 'lucide-react';
 
 const SYNTH_TYPES: { value: SynthType; label: string }[] = [
   { value: 'analog', label: 'ANALOG' },
@@ -24,10 +27,24 @@ const Index: React.FC = () => {
   const [currentPreset, setCurrentPreset] = useState<string | null>('Init Patch');
   const [initialized, setInitialized] = useState(false);
   const engineRef = useRef<SynthEngine | null>(null);
+  const looperRef = useRef<LooperEngine | null>(null);
+
+  // Master recording state
+  const [masterRecording, setMasterRecording] = useState(false);
+  const [masterRecordElapsed, setMasterRecordElapsed] = useState(0);
+  const recTimerRef = useRef<number | null>(null);
+
+  // Sequencer state (for looper sync)
+  const [sequencerPlaying, setSequencerPlaying] = useState(false);
+  const [sequencerBpm, setSequencerBpm] = useState(120);
 
   useEffect(() => {
     engineRef.current = new SynthEngine(params);
-    return () => { engineRef.current?.panic(); };
+    looperRef.current = new LooperEngine();
+    return () => {
+      engineRef.current?.panic();
+      looperRef.current?.destroy();
+    };
   }, []);
 
   const ensureInit = useCallback(async () => {
@@ -35,6 +52,12 @@ const Index: React.FC = () => {
     if (!initialized) {
       await engineRef.current.init();
       setInitialized(true);
+
+      // Init looper with a shared audio context
+      if (looperRef.current) {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        looperRef.current.init(ctx, ctx.destination);
+      }
     }
   }, [initialized]);
 
@@ -87,6 +110,42 @@ const Index: React.FC = () => {
     updateParams({ fmModAdsr });
   }, [updateParams]);
 
+  // Master REC button handler
+  const handleMasterRec = useCallback(async () => {
+    await ensureInit();
+    if (!looperRef.current) return;
+
+    if (masterRecording) {
+      looperRef.current.stopMasterRecording();
+      setMasterRecording(false);
+      setMasterRecordElapsed(0);
+      if (recTimerRef.current) {
+        clearInterval(recTimerRef.current);
+        recTimerRef.current = null;
+      }
+    } else {
+      looperRef.current.startMasterRecording();
+      setMasterRecording(true);
+      setMasterRecordElapsed(0);
+      recTimerRef.current = window.setInterval(() => {
+        setMasterRecordElapsed(looperRef.current?.getMasterRecordElapsed() ?? 0);
+      }, 200);
+    }
+  }, [masterRecording, ensureInit]);
+
+  // Cleanup rec timer
+  useEffect(() => {
+    return () => {
+      if (recTimerRef.current) clearInterval(recTimerRef.current);
+    };
+  }, []);
+
+  const formatTime = (secs: number): string => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div
       className="min-h-screen flex flex-col bg-background surface-texture"
@@ -102,6 +161,23 @@ const Index: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <PresetSelector onSelect={handlePreset} currentPreset={currentPreset} />
+
+          {/* Master REC button */}
+          <button
+            onClick={handleMasterRec}
+            className={`min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors
+              ${masterRecording
+                ? 'bg-led-red/30 text-led-red border-led-red animate-pulse'
+                : 'bg-led-red/10 text-led-red border-led-red/50 hover:bg-led-red/20'
+              }`}
+          >
+            <Circle className="w-3 h-3" fill={masterRecording ? 'currentColor' : 'none'} />
+            <span>REC</span>
+            {masterRecording && (
+              <span className="font-mono-synth text-[9px] text-led-red">{formatTime(masterRecordElapsed)}</span>
+            )}
+          </button>
+
           {/* PANIC button */}
           <button
             onClick={handlePanic}
@@ -173,6 +249,15 @@ const Index: React.FC = () => {
         synthEngine={engineRef.current}
         initialized={initialized}
         ensureInit={ensureInit}
+        onPlayingChange={setSequencerPlaying}
+        onBpmChange={setSequencerBpm}
+      />
+
+      {/* Looper */}
+      <LooperSection
+        looperEngine={looperRef.current}
+        bpm={sequencerBpm}
+        sequencerPlaying={sequencerPlaying}
       />
 
       {/* Keyboard - sticky bottom */}
