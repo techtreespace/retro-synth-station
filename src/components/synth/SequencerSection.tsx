@@ -219,9 +219,9 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
         <div className="px-3 pb-3 space-y-4">
           {/* Transport + Global Controls */}
           <div className="flex flex-wrap items-end gap-3">
-            {/* Play/Stop */}
+            {/* Play */}
             <button
-              onClick={handlePlayStop}
+              onClick={handlePlay}
               className={`min-w-[44px] min-h-[44px] px-4 py-2 rounded font-display text-[10px] tracking-wider border transition-colors
                 ${playing
                   ? 'bg-led-green/20 text-led-green border-led-green'
@@ -231,12 +231,17 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
               {playing ? <Square className="w-4 h-4 inline" /> : <Play className="w-4 h-4 inline" />}
             </button>
 
-            {/* Reset */}
+            {/* Pause */}
             <button
-              onClick={handleReset}
-              className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground hover:border-synth-panel-foreground/40 transition-colors"
+              onClick={handlePause}
+              className={`min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border transition-colors
+                ${paused
+                  ? 'bg-led-amber/20 text-led-amber border-led-amber'
+                  : 'bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border hover:border-synth-panel-foreground/40'
+                }`}
+              disabled={!playing}
             >
-              <RotateCcw className="w-4 h-4 inline" />
+              <Pause className="w-4 h-4 inline" />
             </button>
 
             {/* BPM */}
