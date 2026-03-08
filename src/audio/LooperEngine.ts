@@ -329,7 +329,8 @@ export class LooperEngine {
 
     recorder.onstop = () => {
       const blob = new Blob(this.masterRecordChunks, { type: recorder.mimeType });
-      this.downloadBlob(blob, `retrosynth_${Date.now()}.wav`);
+      const ext = recorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
+      this.downloadBlob(blob, `retrosynth_${Date.now()}.${ext}`);
       this.masterRecording = false;
       this.onMasterRecordingChange?.(false, 0);
     };
