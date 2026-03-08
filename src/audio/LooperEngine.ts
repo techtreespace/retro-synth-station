@@ -61,6 +61,9 @@ export class LooperEngine {
       volume: 0.8,
       waveformData: [],
       startOffset: 0,
+      endOffset: 0,
+      fadeIn: 0.02,
+      fadeOut: 0.02,
     }));
   }
 
