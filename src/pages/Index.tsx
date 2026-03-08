@@ -9,6 +9,7 @@ import EnvelopeSection from '@/components/synth/EnvelopeSection';
 import LFOSection from '@/components/synth/LFOSection';
 import PresetSelector from '@/components/synth/PresetSelector';
 import Keyboard from '@/components/synth/Keyboard';
+import SequencerSection from '@/components/synth/SequencerSection';
 
 const SYNTH_TYPES: { value: SynthType; label: string }[] = [
   { value: 'analog', label: 'ANALOG' },
