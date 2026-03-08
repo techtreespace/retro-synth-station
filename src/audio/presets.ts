@@ -1,0 +1,208 @@
+import { SynthParams } from './SynthEngine';
+
+export interface Preset {
+  name: string;
+  category: 'analog' | 'wavetable' | 'fm';
+  params: Partial<SynthParams>;
+}
+
+const defaultADSR = { attack: 0.01, decay: 0.3, sustain: 0.7, release: 0.3 };
+const defaultModADSR = { attack: 0.01, decay: 0.3, sustain: 0.7, release: 0.3 };
+
+export const DEFAULT_PARAMS: SynthParams = {
+  type: 'analog',
+  masterVolume: 0.5,
+  glide: 0,
+  pitchBend: 0,
+  modWheel: 0,
+  waveform: 'sawtooth',
+  pulseWidth: 0.5,
+  filterCutoff: 8000,
+  filterResonance: 1,
+  filterType: 'lowpass',
+  adsr: { ...defaultADSR },
+  lfoRate: 2,
+  lfoDepth: 0,
+  lfoTarget: 'pitch',
+  wavetableType: 'basic',
+  wavetablePosition: 0,
+  fmModIndex: 1,
+  fmCarrierRatio: 1,
+  fmModRatio: 1,
+  fmFeedback: 0,
+  fmModAdsr: { ...defaultModADSR },
+};
+
+export const PRESETS: Preset[] = [
+  {
+    name: 'Init Patch',
+    category: 'analog',
+    params: {
+      type: 'analog',
+      waveform: 'sawtooth',
+      filterCutoff: 8000,
+      filterResonance: 1,
+      adsr: { attack: 0.01, decay: 0.3, sustain: 0.7, release: 0.3 },
+      lfoDepth: 0,
+    },
+  },
+  {
+    name: 'Bass Growl',
+    category: 'analog',
+    params: {
+      type: 'analog',
+      waveform: 'sawtooth',
+      filterCutoff: 800,
+      filterResonance: 8,
+      adsr: { attack: 0.005, decay: 0.4, sustain: 0.3, release: 0.15 },
+      lfoRate: 6,
+      lfoDepth: 0.3,
+      lfoTarget: 'filter',
+    },
+  },
+  {
+    name: 'Warm Pad',
+    category: 'analog',
+    params: {
+      type: 'analog',
+      waveform: 'triangle',
+      filterCutoff: 2500,
+      filterResonance: 2,
+      adsr: { attack: 0.8, decay: 1.0, sustain: 0.8, release: 1.5 },
+      lfoRate: 0.5,
+      lfoDepth: 0.15,
+      lfoTarget: 'pitch',
+    },
+  },
+  {
+    name: 'Lead Classic',
+    category: 'analog',
+    params: {
+      type: 'analog',
+      waveform: 'square',
+      filterCutoff: 3000,
+      filterResonance: 5,
+      adsr: { attack: 0.01, decay: 0.2, sustain: 0.6, release: 0.2 },
+      lfoRate: 5,
+      lfoDepth: 0.1,
+      lfoTarget: 'pitch',
+    },
+  },
+  {
+    name: 'String Ensemble',
+    category: 'wavetable',
+    params: {
+      type: 'wavetable',
+      wavetableType: 'strings',
+      wavetablePosition: 0.4,
+      filterCutoff: 4000,
+      filterResonance: 1,
+      adsr: { attack: 0.6, decay: 0.8, sustain: 0.9, release: 1.0 },
+      lfoRate: 4,
+      lfoDepth: 0.05,
+      lfoTarget: 'pitch',
+    },
+  },
+  {
+    name: 'Vocal Aah',
+    category: 'wavetable',
+    params: {
+      type: 'wavetable',
+      wavetableType: 'vocal',
+      wavetablePosition: 0.3,
+      filterCutoff: 5000,
+      filterResonance: 3,
+      adsr: { attack: 0.3, decay: 0.5, sustain: 0.7, release: 0.6 },
+      lfoRate: 5,
+      lfoDepth: 0.08,
+      lfoTarget: 'filter',
+    },
+  },
+  {
+    name: 'Digital Pad',
+    category: 'wavetable',
+    params: {
+      type: 'wavetable',
+      wavetableType: 'pad',
+      wavetablePosition: 0.5,
+      filterCutoff: 6000,
+      filterResonance: 2,
+      adsr: { attack: 1.0, decay: 1.5, sustain: 0.85, release: 2.0 },
+      lfoRate: 0.3,
+      lfoDepth: 0.2,
+      lfoTarget: 'filter',
+    },
+  },
+  {
+    name: 'Electric Piano',
+    category: 'fm',
+    params: {
+      type: 'fm',
+      fmModIndex: 2,
+      fmCarrierRatio: 1,
+      fmModRatio: 1,
+      fmFeedback: 0,
+      filterCutoff: 8000,
+      adsr: { attack: 0.005, decay: 1.5, sustain: 0.2, release: 0.8 },
+      fmModAdsr: { attack: 0.005, decay: 0.8, sustain: 0.1, release: 0.5 },
+    },
+  },
+  {
+    name: 'Bell Tower',
+    category: 'fm',
+    params: {
+      type: 'fm',
+      fmModIndex: 5,
+      fmCarrierRatio: 1,
+      fmModRatio: 3,
+      fmFeedback: 0.1,
+      filterCutoff: 12000,
+      adsr: { attack: 0.001, decay: 3.0, sustain: 0.0, release: 2.0 },
+      fmModAdsr: { attack: 0.001, decay: 2.0, sustain: 0.0, release: 1.5 },
+    },
+  },
+  {
+    name: 'Metallic Hit',
+    category: 'fm',
+    params: {
+      type: 'fm',
+      fmModIndex: 8,
+      fmCarrierRatio: 1,
+      fmModRatio: 4,
+      fmFeedback: 0.3,
+      filterCutoff: 10000,
+      filterResonance: 4,
+      adsr: { attack: 0.001, decay: 0.5, sustain: 0.0, release: 0.3 },
+      fmModAdsr: { attack: 0.001, decay: 0.3, sustain: 0.2, release: 0.2 },
+    },
+  },
+  {
+    name: 'DX Bass',
+    category: 'fm',
+    params: {
+      type: 'fm',
+      fmModIndex: 3,
+      fmCarrierRatio: 1,
+      fmModRatio: 1,
+      fmFeedback: 0.15,
+      filterCutoff: 2000,
+      adsr: { attack: 0.005, decay: 0.4, sustain: 0.4, release: 0.15 },
+      fmModAdsr: { attack: 0.005, decay: 0.2, sustain: 0.3, release: 0.1 },
+    },
+  },
+  {
+    name: 'Bright Lead',
+    category: 'fm',
+    params: {
+      type: 'fm',
+      fmModIndex: 4,
+      fmCarrierRatio: 1,
+      fmModRatio: 2,
+      fmFeedback: 0.05,
+      filterCutoff: 6000,
+      filterResonance: 3,
+      adsr: { attack: 0.01, decay: 0.3, sustain: 0.6, release: 0.25 },
+      fmModAdsr: { attack: 0.01, decay: 0.2, sustain: 0.5, release: 0.2 },
+    },
+  },
+];
