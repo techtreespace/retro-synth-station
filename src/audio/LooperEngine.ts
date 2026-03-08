@@ -395,10 +395,11 @@ export class LooperEngine {
         startTime = Math.max(nextBar, this.ctx.currentTime + 0.01);
       }
 
-      source.start(startTime);
+      const playOffset = this.slots[index].startOffset + this.slots[index].autoTrimOffset;
+      source.start(startTime, playOffset);
       this.slotSources[index] = source;
 
-      const bufferDuration = source.buffer!.duration;
+      const bufferDuration = source.buffer!.duration - playOffset;
       const delay = (startTime - this.ctx.currentTime + bufferDuration) * 1000;
 
       this.slotLoopTimers[index] = window.setTimeout(() => {
