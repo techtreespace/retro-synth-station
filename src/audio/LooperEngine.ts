@@ -271,11 +271,10 @@ export class LooperEngine {
       source.buffer = this.slots[index].buffer;
       source.connect(this.slotGains[index]!);
 
-      // Calculate start time synced to BPM
+      // Calculate start time synced to BPM using sequencer start reference
       let startTime = this.ctx.currentTime;
       if (this.syncToBpm) {
-        const barDuration = this.getBarDuration();
-        const nextBar = Math.ceil(this.ctx.currentTime / barDuration) * barDuration;
+        const nextBar = this.getNextBarTime();
         startTime = Math.max(nextBar, this.ctx.currentTime + 0.01);
       }
 
