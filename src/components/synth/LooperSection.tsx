@@ -133,6 +133,15 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
     });
   }, [looperEngine]);
 
+  const handleSlotStartOffset = useCallback((index: number, offset: number) => {
+    looperEngine?.setSlotStartOffset(index, offset);
+    setSlots(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], startOffset: offset };
+      return next;
+    });
+  }, [looperEngine]);
+
   const handleStopAll = useCallback(() => {
     looperEngine?.stopAllSlots();
   }, [looperEngine]);
