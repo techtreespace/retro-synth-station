@@ -36,6 +36,7 @@ export class LooperEngine {
   private masterStreamDest: MediaStreamAudioDestinationNode | null = null;
   private masterRecording = false;
   private masterRecordStart = 0;
+  private masterPendingDownload = false;
 
   // Metronome
   private metronomeEnabled = false;
@@ -545,9 +546,13 @@ export class LooperEngine {
     };
 
     recorder.onstop = () => {
-      const blob = new Blob(this.masterRecordChunks, { type: recorder.mimeType });
-      const ext = recorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
-      this.downloadBlob(blob, `retrosynth_${Date.now()}.${ext}`);
+      // Download is now handled by stopMasterRecording based on format
+      if (this.masterPendingDownload) {
+        const blob = new Blob(this.masterRecordChunks, { type: recorder.mimeType });
+        const ext = recorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
+        this.downloadBlob(blob, `retrosynth_${Date.now()}.${ext}`);
+        this.masterPendingDownload = false;
+      }
       this.masterRecording = false;
       this.masterPaused = false;
       this.masterPauseElapsed = 0;
@@ -578,14 +583,86 @@ export class LooperEngine {
     this.masterRecordStart = Date.now() - this.masterPauseElapsed * 1000;
   }
 
-  stopMasterRecording(): void {
+  stopMasterRecording(format: 'wav' | 'webm' | 'mp4' = 'webm'): void {
     this.stopMasterPreview();
-    if (this.masterRecorder && (this.masterRecorder.state === 'recording' || this.masterRecorder.state === 'paused')) {
-      this.masterRecorder.stop();
+    if (format === 'wav') {
+      // WAV export: decode recorded chunks to AudioBuffer, then encode as WAV
+      this.exportAsWav();
+      if (this.masterRecorder && (this.masterRecorder.state === 'recording' || this.masterRecorder.state === 'paused')) {
+        try { this.masterRecorder.stop(); } catch {}
+      }
+      this.masterRecorder = null;
+      this.masterRecording = false;
+      this.masterPaused = false;
+      this.masterPauseElapsed = 0;
+      this.onMasterRecordingChange?.(false, 0);
+    } else {
+      this.masterPendingDownload = true;
+      if (this.masterRecorder && (this.masterRecorder.state === 'recording' || this.masterRecorder.state === 'paused')) {
+        this.masterRecorder.stop();
+      }
+      this.masterRecorder = null;
+      this.masterPaused = false;
+      this.masterPauseElapsed = 0;
     }
-    this.masterRecorder = null;
-    this.masterPaused = false;
-    this.masterPauseElapsed = 0;
+  }
+
+  private async exportAsWav(): Promise<void> {
+    if (!this.ctx || this.masterRecordChunks.length === 0) return;
+    try {
+      const blob = new Blob(this.masterRecordChunks, {
+        type: this.masterRecorder?.mimeType || this.getSupportedMimeType()
+      });
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+      const wavBlob = this.audioBufferToWav(audioBuffer);
+      this.downloadBlob(wavBlob, `retrosynth_${Date.now()}.wav`);
+    } catch (e) {
+      console.error('WAV export failed, falling back to webm', e);
+      const blob = new Blob(this.masterRecordChunks, {
+        type: this.masterRecorder?.mimeType || this.getSupportedMimeType()
+      });
+      const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+      this.downloadBlob(blob, `retrosynth_${Date.now()}.${ext}`);
+    }
+  }
+
+  private audioBufferToWav(buffer: AudioBuffer): Blob {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+    const samples = buffer.length * numChannels;
+    const arrayBuffer = new ArrayBuffer(44 + samples * 2);
+    const view = new DataView(arrayBuffer);
+
+    const writeString = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    };
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + samples * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numChannels * bitDepth / 8, true);
+    view.setUint16(32, numChannels * bitDepth / 8, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(36, 'data');
+    view.setUint32(40, samples * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < buffer.length; i++) {
+      for (let ch = 0; ch < numChannels; ch++) {
+        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]));
+        view.setInt16(offset, sample * 0x7FFF, true);
+        offset += 2;
+      }
+    }
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
   }
 
   isMasterPaused(): boolean { return this.masterPaused; }

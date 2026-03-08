@@ -22,12 +22,13 @@ interface SequencerSectionProps {
   onStartTimeChange?: (time: number) => void;
   recordingDest?: AudioNode | null;
   masterGain?: GainNode | null;
+  defaultExpanded?: boolean;
 }
 
 const PATTERN_LENGTHS: (8 | 16 | 32)[] = [8, 16, 32];
 
-const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProps>(({ synthEngine, initialized, ensureInit, onPlayingChange, onBpmChange, onStartTimeChange, recordingDest, masterGain }, ref) => {
-  const [collapsed, setCollapsed] = useState(false);
+const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProps>(({ synthEngine, initialized, ensureInit, onPlayingChange, onBpmChange, onStartTimeChange, recordingDest, masterGain, defaultExpanded }, ref) => {
+  const [collapsed, setCollapsed] = useState(!defaultExpanded);
   const [playing, setPlaying] = useState(false);
   const [paused, setPaused] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);

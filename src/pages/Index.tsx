@@ -15,12 +15,23 @@ import SequencerSection, { SequencerSectionHandle } from '@/components/synth/Seq
 import LooperSection from '@/components/synth/LooperSection';
 import InputMixer from '@/components/synth/InputMixer';
 import FxPad from '@/components/synth/FxPad';
-import { Circle, Pause, Play, Square, Download, Eye } from 'lucide-react';
+import { Circle, Pause, Play, Square, Download, Settings, ChevronUp, ChevronDown } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const SYNTH_TYPES: { value: SynthType; label: string }[] = [
   { value: 'analog', label: 'ANALOG' },
   { value: 'wavetable', label: 'WAVETABLE' },
   { value: 'fm', label: 'FM' },
+];
+
+type MobileTab = 'synth' | 'drum' | 'loop' | 'fx';
+type ExportFormat = 'wav' | 'webm' | 'mp4';
+
+const MOBILE_TABS: { id: MobileTab; label: string }[] = [
+  { id: 'synth', label: 'SYNTH' },
+  { id: 'drum', label: 'DRUM' },
+  { id: 'loop', label: 'LOOP' },
+  { id: 'fx', label: 'FX' },
 ];
 
 const Index: React.FC = () => {
@@ -33,6 +44,18 @@ const Index: React.FC = () => {
   const looperRef = useRef<LooperEngine | null>(null);
   const inputRef = useRef<AudioInputEngine | null>(null);
   const sequencerRef = useRef<SequencerSectionHandle | null>(null);
+  const isMobile = useIsMobile();
+
+  // Mobile tab state
+  const [activeTab, setActiveTab] = useState<MobileTab>('synth');
+  const [keyboardVisible, setKeyboardVisible] = useState(true);
+
+  // Export format
+  const [exportFormat, setExportFormat] = useState<ExportFormat>(() => {
+    return (localStorage.getItem('retrosynth-export-format') as ExportFormat) || 'wav';
+  });
+  const [showFormatPicker, setShowFormatPicker] = useState(false);
+  const formatPickerRef = useRef<HTMLDivElement>(null);
 
   // Master recording state machine: 'idle' | 'recording' | 'paused' | 'previewing'
   type RecState = 'idle' | 'recording' | 'paused' | 'stopped' | 'previewing';
@@ -44,6 +67,22 @@ const Index: React.FC = () => {
   // Sequencer state (for looper sync)
   const [sequencerPlaying, setSequencerPlaying] = useState(false);
   const [sequencerBpm, setSequencerBpm] = useState(120);
+
+  // Persist export format
+  useEffect(() => {
+    localStorage.setItem('retrosynth-export-format', exportFormat);
+  }, [exportFormat]);
+
+  // Close format picker on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (formatPickerRef.current && !formatPickerRef.current.contains(e.target as Node)) {
+        setShowFormatPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     engineRef.current = new SynthEngine(params);
@@ -62,14 +101,11 @@ const Index: React.FC = () => {
       await engineRef.current.init();
       setInitialized(true);
 
-      // Init looper with the synth's shared audio context and master gain
       if (looperRef.current && engineRef.current) {
         const ctx = engineRef.current.getAudioContext();
         const masterGain = engineRef.current.getMasterGain();
         if (ctx) {
           looperRef.current.init(ctx, ctx.destination, masterGain);
-
-          // Init input engine with same audio context and master gain
           if (inputRef.current && masterGain) {
             inputRef.current.init(ctx, masterGain, looperRef.current.getMasterStreamDest());
           }
@@ -139,7 +175,6 @@ const Index: React.FC = () => {
     if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null; }
   }, []);
 
-  // REC button: idle → recording
   const handleStartRec = useCallback(async () => {
     await ensureInit();
     if (!looperRef.current) return;
@@ -149,172 +184,190 @@ const Index: React.FC = () => {
     startElapsedTimer();
   }, [ensureInit, startElapsedTimer]);
 
-  // PAUSE button: recording → paused
   const handlePauseRec = useCallback(() => {
     if (!looperRef.current) return;
     looperRef.current.pauseMasterRecording();
     stopElapsedTimer();
-    // Pause sequencer and store position
     const pos = sequencerRef.current?.pauseSequencer() ?? null;
     seqPausePositionRef.current = pos;
-    // Disable input monitoring
     inputRef.current?.setMonitoring(false);
     setRecState('paused');
   }, [stopElapsedTimer]);
 
-  // REC button from paused → resume recording
   const handleResumeRec = useCallback(() => {
     if (!looperRef.current) return;
     looperRef.current.resumeMasterRecording();
     startElapsedTimer();
-    // Resume sequencer from exact pause position
     if (seqPausePositionRef.current) {
       sequencerRef.current?.resumeFromPosition(seqPausePositionRef.current);
     }
     setRecState('recording');
   }, [startElapsedTimer]);
 
-  // PREVIEW button from paused/stopped → previewing
   const handlePreview = useCallback(async () => {
     if (!looperRef.current) return;
     const prevState = recState;
     setRecState('previewing');
     await looperRef.current.previewMasterRecording(() => {
-      // On preview end → back to previous state, NOT resume sequencer
       setRecState(prevState === 'stopped' ? 'stopped' : 'paused');
     });
   }, [recState]);
 
-  // STOP preview
   const handleStopPreview = useCallback(() => {
     looperRef.current?.stopMasterPreview();
-    // Go back to paused or stopped depending on where we came from
     setRecState(prev => prev === 'previewing' ? 'paused' : prev);
   }, []);
 
-  // STOP recording → stopped (keeps data, doesn't download yet)
   const handleStopRec = useCallback(() => {
     if (!looperRef.current) return;
-    looperRef.current.pauseMasterRecording(); // pause, don't finalize
+    looperRef.current.pauseMasterRecording();
     stopElapsedTimer();
-    // If currently previewing, stop preview first
     looperRef.current.stopMasterPreview();
     setRecState('stopped');
   }, [stopElapsedTimer]);
 
-  // SAVE → finalize and download
   const handleSaveRec = useCallback(() => {
     if (!looperRef.current) return;
-    looperRef.current.stopMasterRecording(); // triggers download
+    looperRef.current.stopMasterRecording(exportFormat);
     stopElapsedTimer();
     setRecState('idle');
     setMasterRecordElapsed(0);
     seqPausePositionRef.current = null;
-  }, [stopElapsedTimer]);
+  }, [stopElapsedTimer, exportFormat]);
 
-  // Cleanup rec timer
   useEffect(() => {
     return () => { if (recTimerRef.current) clearInterval(recTimerRef.current); };
   }, []);
+
   const formatTime = (secs: number): string => {
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  return (
-    <div
-      className="min-h-screen flex flex-col bg-background surface-texture"
-      onContextMenu={(e) => e.preventDefault()}
-    >
+  // ===== TRANSPORT BAR (shared) =====
+  const renderTransport = () => {
+    const isIdle = recState === 'idle';
+    const isRec = recState === 'recording';
+    const isPaused = recState === 'paused';
+    const isStopped = recState === 'stopped';
+    const isPreviewing = recState === 'previewing';
+
+    const recEnabled = isIdle || isPaused;
+    const pauseEnabled = isRec;
+    const stopEnabled = isRec || isPaused || isPreviewing;
+    const previewEnabled = isPaused || isStopped;
+    const saveEnabled = isStopped || isPreviewing;
+
+    const btnBase = "w-[44px] h-[32px] md:w-[52px] md:h-[36px] p-0 rounded font-display border transition-colors flex flex-col items-center justify-center";
+    const btnDisabled = "opacity-25 cursor-not-allowed pointer-events-none border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground";
+    const btnAvailable = "opacity-100 cursor-pointer border-led-amber/60 bg-synth-surface-dark text-led-amber hover:bg-led-amber/10";
+    const btnActive = "opacity-100 border-led-amber bg-led-amber/20 text-led-amber";
+
+    return (
+      <div className="flex flex-row gap-1 flex-shrink-0 items-center">
+        {/* REC */}
+        <button
+          onClick={recEnabled ? (isPaused ? handleResumeRec : handleStartRec) : undefined}
+          className={`${btnBase} ${isRec ? `${btnActive} animate-pulse !text-led-red !border-led-red !bg-led-red/20` : recEnabled ? btnAvailable : btnDisabled}`}
+        >
+          <Circle className="w-3 h-3" fill={isRec ? 'currentColor' : 'none'} />
+          <span className="text-[7px] tracking-wider leading-none mt-0.5">REC</span>
+        </button>
+
+        {/* PAUSE */}
+        <button
+          onClick={pauseEnabled ? handlePauseRec : undefined}
+          className={`${btnBase} ${isPaused ? btnActive : pauseEnabled ? btnAvailable : btnDisabled}`}
+        >
+          <Pause className="w-3 h-3" />
+          <span className="text-[7px] tracking-wider leading-none mt-0.5">PAUSE</span>
+        </button>
+
+        {/* STOP */}
+        <button
+          onClick={stopEnabled ? handleStopRec : undefined}
+          className={`${btnBase} ${isStopped ? btnActive : stopEnabled ? btnAvailable : btnDisabled}`}
+        >
+          <Square className="w-3 h-3" />
+          <span className="text-[7px] tracking-wider leading-none mt-0.5">STOP</span>
+        </button>
+
+        {/* PREVIEW */}
+        <button
+          onClick={previewEnabled ? handlePreview : isPreviewing ? handleStopPreview : undefined}
+          className={`${btnBase} ${isPreviewing ? `${btnActive} animate-pulse !text-led-green !border-led-green !bg-led-green/20` : previewEnabled ? btnAvailable : btnDisabled}`}
+        >
+          <Play className="w-3 h-3" />
+          <span className="text-[7px] tracking-wider leading-none mt-0.5">{isPreviewing ? 'STOP' : 'PRE'}</span>
+        </button>
+
+        {/* SAVE + format */}
+        <div className="relative flex items-center gap-0.5" ref={formatPickerRef}>
+          <button
+            onClick={saveEnabled ? handleSaveRec : undefined}
+            className={`${btnBase} ${saveEnabled ? btnAvailable : btnDisabled}`}
+          >
+            <Download className="w-3 h-3" />
+            <span className="text-[7px] tracking-wider leading-none mt-0.5">SAVE</span>
+          </button>
+          <button
+            onClick={() => setShowFormatPicker(!showFormatPicker)}
+            className="w-[28px] h-[32px] md:h-[36px] flex flex-col items-center justify-center rounded border border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground hover:border-synth-panel-foreground/40 transition-colors"
+          >
+            <Settings className="w-3 h-3" />
+            <span className="text-[6px] font-mono-synth leading-none mt-0.5 text-led-amber">{exportFormat.toUpperCase()}</span>
+          </button>
+
+          {showFormatPicker && (
+            <div className="absolute top-full right-0 mt-1 z-50 bg-synth-surface-dark border border-synth-panel-border rounded shadow-lg min-w-[140px]">
+              {([
+                { value: 'wav' as ExportFormat, label: 'WAV', desc: 'recommended' },
+                { value: 'webm' as ExportFormat, label: 'WEBM', desc: 'smaller file' },
+                { value: 'mp4' as ExportFormat, label: 'MP4', desc: 'iOS Safari' },
+              ]).map(f => (
+                <button
+                  key={f.value}
+                  onClick={() => { setExportFormat(f.value); setShowFormatPicker(false); }}
+                  className={`w-full text-left px-3 py-2 min-h-[36px] flex items-center gap-2 transition-colors ${
+                    exportFormat === f.value
+                      ? 'text-led-amber bg-led-amber/10'
+                      : 'text-synth-panel-foreground hover:bg-synth-panel-border/30'
+                  }`}
+                >
+                  <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${
+                    exportFormat === f.value ? 'border-led-amber bg-led-amber' : 'border-synth-panel-foreground/40'
+                  }`} />
+                  <div>
+                    <span className="text-[10px] font-display tracking-wider">{f.label}</span>
+                    <span className="text-[8px] font-mono-synth ml-1 opacity-50">{f.desc}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Elapsed time */}
+        {(recState === 'recording' || recState === 'paused' || recState === 'stopped') && (
+          <span className="font-mono-synth text-[10px] text-led-amber ml-1">{formatTime(masterRecordElapsed)}</span>
+        )}
+      </div>
+    );
+  };
+
+  // ===== DESKTOP LAYOUT =====
+  const renderDesktop = () => (
+    <>
       {/* Header */}
       <header className="bg-synth-panel px-3 py-2 flex items-center justify-between border-b-2 border-synth-panel-border">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-led-amber animate-led-pulse led-glow-sm" />
-          <h1 className="font-display text-sm md:text-base text-led-amber tracking-widest">
-            RETROSYNTH
-          </h1>
+          <h1 className="font-display text-sm md:text-base text-led-amber tracking-widest">RETROSYNTH</h1>
         </div>
         <div className="flex items-center gap-2">
           <PresetSelector onSelect={handlePreset} currentPreset={currentPreset} />
-
-          {/* Master Recording Transport — all 5 buttons always visible */}
-          {(() => {
-            const isIdle = recState === 'idle';
-            const isRec = recState === 'recording';
-            const isPaused = recState === 'paused';
-            const isStopped = recState === 'stopped';
-            const isPreviewing = recState === 'previewing';
-
-            const recEnabled = isIdle || isPaused;
-            const pauseEnabled = isRec;
-            const stopEnabled = isRec || isPaused || isPreviewing;
-            const previewEnabled = isPaused || isStopped;
-            const saveEnabled = isStopped || isPreviewing;
-
-            const btnBase = "w-[52px] h-[36px] p-0 rounded font-display border transition-colors flex flex-col items-center justify-center";
-            const btnDisabled = "opacity-25 cursor-not-allowed pointer-events-none border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground";
-            const btnAvailable = "opacity-100 cursor-pointer border-led-amber/60 bg-synth-surface-dark text-led-amber hover:bg-led-amber/10";
-            const btnActive = "opacity-100 border-led-amber bg-led-amber/20 text-led-amber";
-
-            return (
-              <div className="flex flex-row gap-1.5 flex-shrink-0">
-                {/* REC */}
-                <button
-                  onClick={recEnabled ? (isPaused ? handleResumeRec : handleStartRec) : undefined}
-                  className={`${btnBase} ${isRec ? `${btnActive} animate-pulse !text-led-red !border-led-red !bg-led-red/20` : recEnabled ? btnAvailable : btnDisabled}`}
-                >
-                  <Circle className="w-3 h-3" fill={isRec ? 'currentColor' : 'none'} />
-                  <span className="text-[8px] tracking-wider leading-none mt-0.5">REC</span>
-                </button>
-
-                {/* PAUSE */}
-                <button
-                  onClick={pauseEnabled ? handlePauseRec : undefined}
-                  className={`${btnBase} ${isPaused ? btnActive : pauseEnabled ? btnAvailable : btnDisabled}`}
-                >
-                  <Pause className="w-3 h-3" />
-                  <span className="text-[8px] tracking-wider leading-none mt-0.5">PAUSE</span>
-                </button>
-
-                {/* STOP */}
-                <button
-                  onClick={stopEnabled ? handleStopRec : undefined}
-                  className={`${btnBase} ${isStopped ? btnActive : stopEnabled ? btnAvailable : btnDisabled}`}
-                >
-                  <Square className="w-3 h-3" />
-                  <span className="text-[8px] tracking-wider leading-none mt-0.5">STOP</span>
-                </button>
-
-                {/* PREVIEW */}
-                <button
-                  onClick={previewEnabled ? handlePreview : isPreviewing ? handleStopPreview : undefined}
-                  className={`${btnBase} ${isPreviewing ? `${btnActive} animate-pulse !text-led-green !border-led-green !bg-led-green/20` : previewEnabled ? btnAvailable : btnDisabled}`}
-                >
-                  <Play className="w-3 h-3" />
-                  <span className="text-[8px] tracking-wider leading-none mt-0.5">{isPreviewing ? 'STOP' : 'PREVIEW'}</span>
-                </button>
-
-                {/* SAVE */}
-                <button
-                  onClick={saveEnabled ? handleSaveRec : undefined}
-                  className={`${btnBase} ${saveEnabled ? btnAvailable : btnDisabled}`}
-                >
-                  <Download className="w-3 h-3" />
-                  <span className="text-[8px] tracking-wider leading-none mt-0.5">SAVE</span>
-                </button>
-              </div>
-            );
-          })()}
-
-          {/* Elapsed time display */}
-          {(recState === 'recording' || recState === 'paused' || recState === 'stopped') && (
-            <span className="font-mono-synth text-[10px] text-led-amber">{formatTime(masterRecordElapsed)}</span>
-          )}
-
-
-
-          {/* PANIC button */}
+          {renderTransport()}
           <button
             onClick={handlePanic}
             className="min-w-[44px] min-h-[44px] rounded font-display text-[10px] tracking-wider border border-led-red bg-led-red/20 text-led-red hover:bg-led-red/40 active:bg-led-red/60 transition-colors flex items-center justify-center p-0 leading-none"
@@ -345,7 +398,6 @@ const Index: React.FC = () => {
               </button>
             ))}
           </div>
-
           <Knob value={params.masterVolume} min={0} max={1} label="Volume" onChange={(v) => updateParams({ masterVolume: v })} size="md" />
           <Knob value={params.glide} min={0} max={1} label="Glide" onChange={(v) => updateParams({ glide: v })} size="sm" />
           <WheelControl value={params.pitchBend} onChange={(v) => updateParams({ pitchBend: v })} label="Pitch" centered />
@@ -373,7 +425,6 @@ const Index: React.FC = () => {
             )}
           </div>
         </div>
-
         {params.type === 'fm' && (
           <div className="mt-4 max-w-[200px]">
             <div className="bg-synth-surface-dark/50 rounded-lg p-3 panel-shadow">
@@ -423,6 +474,201 @@ const Index: React.FC = () => {
           activeNotes={activeNotes}
         />
       </div>
+    </>
+  );
+
+  // ===== MOBILE LAYOUT =====
+  const renderMobile = () => (
+    <>
+      {/* Header */}
+      <header className="bg-synth-panel px-2 py-1.5 flex items-center justify-between border-b-2 border-synth-panel-border">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-led-amber animate-led-pulse led-glow-sm" />
+          <h1 className="font-display text-[10px] text-led-amber tracking-widest">RETROSYNTH</h1>
+        </div>
+        <div className="flex items-center gap-1">
+          {renderTransport()}
+          <button
+            onClick={handlePanic}
+            className="min-w-[36px] min-h-[36px] rounded font-display text-[8px] tracking-wider border border-led-red bg-led-red/20 text-led-red hover:bg-led-red/40 active:bg-led-red/60 transition-colors flex items-center justify-center p-0 leading-none"
+          >
+            <span className="block w-full text-center leading-none">PANIC</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Tab Bar — sticky */}
+      <div className="sticky top-0 z-30 bg-synth-panel border-b border-synth-panel-border flex">
+        {MOBILE_TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 min-h-[44px] font-display text-[10px] tracking-widest transition-colors relative ${
+              activeTab === tab.id
+                ? 'text-led-amber'
+                : 'text-synth-panel-foreground/60 hover:text-synth-panel-foreground'
+            }`}
+          >
+            {tab.label}
+            {activeTab === tab.id && (
+              <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-led-amber" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <div className="flex-1 overflow-auto bg-synth-panel">
+        {activeTab === 'synth' && renderMobileSynth()}
+        {activeTab === 'drum' && renderMobileDrum()}
+        {activeTab === 'loop' && renderMobileLoop()}
+        {activeTab === 'fx' && renderMobileFx()}
+      </div>
+
+      {/* Keyboard — collapsible, sticky bottom */}
+      {keyboardVisible ? (
+        <div className="sticky bottom-0 z-20 bg-card border-t-2 border-border shadow-lg">
+          <button
+            onClick={() => setKeyboardVisible(false)}
+            className="w-full flex items-center justify-center gap-1 py-1 bg-synth-panel text-synth-panel-foreground/60 text-[9px] font-display tracking-wider"
+          >
+            <ChevronDown className="w-3 h-3" /> KEYS
+          </button>
+          <Keyboard
+            octave={octave}
+            onNoteOn={handleNoteOn}
+            onNoteOff={handleNoteOff}
+            onOctaveChange={setOctave}
+            onReleaseAll={handleReleaseAll}
+            activeNotes={activeNotes}
+            mobileMode
+          />
+        </div>
+      ) : (
+        <button
+          onClick={() => setKeyboardVisible(true)}
+          className="sticky bottom-0 z-20 w-full min-h-[36px] bg-synth-surface-dark border-t border-synth-panel-border flex items-center justify-center gap-1 text-synth-panel-foreground/50 text-[10px] font-display tracking-wider"
+        >
+          <ChevronUp className="w-3 h-3" /> ⌨ TAP TO SHOW KEYS
+        </button>
+      )}
+    </>
+  );
+
+  // ===== MOBILE SYNTH TAB =====
+  const renderMobileSynth = () => (
+    <div className="p-3 space-y-3">
+      {/* Synth type + presets */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex gap-1">
+          {SYNTH_TYPES.map(t => (
+            <button
+              key={t.value}
+              onClick={() => updateParams({ type: t.value })}
+              className={`min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border transition-colors
+                ${params.type === t.value
+                  ? 'bg-led-amber/20 text-led-amber border-led-amber led-glow-sm'
+                  : 'bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border'
+                }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <PresetSelector onSelect={handlePreset} currentPreset={currentPreset} />
+      </div>
+
+      {/* Oscillator */}
+      <div className="bg-synth-surface-dark/50 rounded-lg p-3 panel-shadow">
+        <OscillatorSection params={params} onChange={updateParams} />
+      </div>
+
+      {/* Filter — large knobs */}
+      <div className="bg-synth-surface-dark/50 rounded-lg p-3 panel-shadow">
+        <FilterSection params={params} onChange={updateParams} />
+      </div>
+
+      {/* ADSR */}
+      <div className="bg-synth-surface-dark/50 rounded-lg p-3 panel-shadow">
+        <EnvelopeSection adsr={params.adsr} onChange={handleAdsrChange} label="Amp Env" />
+      </div>
+
+      {/* LFO */}
+      <div className="bg-synth-surface-dark/50 rounded-lg p-3 panel-shadow">
+        {params.type === 'fm' ? (
+          <>
+            <EnvelopeSection adsr={params.fmModAdsr} onChange={handleModAdsrChange} label="Mod Env" />
+            <div className="mt-3">
+              <LFOSection params={params} onChange={updateParams} />
+            </div>
+          </>
+        ) : (
+          <LFOSection params={params} onChange={updateParams} />
+        )}
+      </div>
+
+      {/* Volume + controls */}
+      <div className="flex flex-wrap items-end gap-3">
+        <Knob value={params.masterVolume} min={0} max={1} label="Volume" onChange={(v) => updateParams({ masterVolume: v })} size="md" />
+        <Knob value={params.glide} min={0} max={1} label="Glide" onChange={(v) => updateParams({ glide: v })} size="sm" />
+      </div>
+
+      {/* Input Mixer */}
+      <InputMixer inputEngine={inputRef.current} initialized={initialized} ensureInit={ensureInit} />
+    </div>
+  );
+
+  // ===== MOBILE DRUM TAB =====
+  const renderMobileDrum = () => (
+    <div className="p-2">
+      <SequencerSection
+        ref={sequencerRef}
+        synthEngine={engineRef.current}
+        initialized={initialized}
+        ensureInit={ensureInit}
+        onPlayingChange={setSequencerPlaying}
+        onBpmChange={setSequencerBpm}
+        onStartTimeChange={(time) => looperRef.current?.setSequencerStartTime(time)}
+        recordingDest={looperRef.current?.getMasterStreamDest() || null}
+        masterGain={engineRef.current?.getMasterGain() || null}
+        defaultExpanded
+      />
+    </div>
+  );
+
+  // ===== MOBILE LOOP TAB =====
+  const renderMobileLoop = () => (
+    <div className="p-2">
+      <LooperSection
+        looperEngine={looperRef.current}
+        bpm={sequencerBpm}
+        sequencerPlaying={sequencerPlaying}
+        defaultExpanded
+      />
+    </div>
+  );
+
+  // ===== MOBILE FX TAB =====
+  const renderMobileFx = () => (
+    <div className="p-2">
+      <FxPad
+        synthEngine={engineRef.current}
+        initialized={initialized}
+        ensureInit={ensureInit}
+        recordingDest={looperRef.current?.getMasterStreamDest() || null}
+        masterGain={engineRef.current?.getMasterGain() || null}
+        defaultExpanded
+        mobileGrid
+      />
+    </div>
+  );
+
+  return (
+    <div
+      className="min-h-screen flex flex-col bg-background surface-texture"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {isMobile ? renderMobile() : renderDesktop()}
 
       {/* Init overlay */}
       {!initialized && (

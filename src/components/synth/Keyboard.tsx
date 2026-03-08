@@ -7,6 +7,7 @@ interface KeyboardProps {
   onOctaveChange: (octave: number) => void;
   onReleaseAll: () => void;
   activeNotes: Set<number>;
+  mobileMode?: boolean;
 }
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -15,20 +16,33 @@ const BLACK_INDICES = [1, 3, 6, 8, 10];
 const BLACK_POSITIONS: Record<number, number> = { 1: 0, 3: 1, 6: 3, 8: 4, 10: 5 };
 
 const KEY_MAP: Record<string, number> = {
-  'a': 0, 'w': 1, 's': 2, 'e': 3, 'd': 4,
-  'f': 5, 't': 6, 'g': 7, 'y': 8, 'h': 9,
-  'u': 10, 'j': 11, 'k': 12,
+  'a': 0,   // C
+  'w': 1,   // C#
+  's': 2,   // D
+  'e': 3,   // D#
+  'd': 4,   // E
+  'f': 5,   // F
+  't': 6,   // F#
+  'g': 7,   // G
+  'y': 8,   // G#
+  'h': 9,   // A
+  'u': 10,  // A#
+  'j': 11,  // B
+  'k': 12,  // C (octave+1)
+  'o': 13,  // C# (octave+1)
+  'l': 14,  // D (octave+1)
+  'p': 15,  // D# (octave+1)
+  ';': 16,  // E (octave+1)
 };
 
 const Keyboard: React.FC<KeyboardProps> = ({
-  octave, onNoteOn, onNoteOff, onOctaveChange, onReleaseAll, activeNotes,
+  octave, onNoteOn, onNoteOff, onOctaveChange, onReleaseAll, activeNotes, mobileMode = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const touchNotes = useRef<Map<number, number>>(new Map());
   const mouseNote = useRef<number | null>(null);
   const mouseDown = useRef(false);
   const heldKeys = useRef<Set<string>>(new Set());
-  // Use refs for callbacks to avoid stale closures in global listeners
   const onNoteOnRef = useRef(onNoteOn);
   const onNoteOffRef = useRef(onNoteOff);
   const onReleaseAllRef = useRef(onReleaseAll);
@@ -80,7 +94,6 @@ const Keyboard: React.FC<KeyboardProps> = ({
     };
 
     const handleBlur = () => {
-      // Release everything on blur/tab switch
       onReleaseAllRef.current();
       mouseNote.current = null;
       mouseDown.current = false;
@@ -103,7 +116,7 @@ const Keyboard: React.FC<KeyboardProps> = ({
       window.removeEventListener('blur', handleBlur);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, []); // ONCE only
+  }, []);
 
   // Touch handlers
   const getNoteFromTouch = useCallback((x: number, y: number): number | null => {
@@ -169,16 +182,18 @@ const Keyboard: React.FC<KeyboardProps> = ({
     }
   }, [onNoteOn, onNoteOff]);
 
-  // Generate 2 octaves
+  // Generate keys: 1 octave for mobile, 2 for desktop
+  const numOctaves = mobileMode ? 1 : 2;
   const whiteKeys: { note: number; name: string }[] = [];
   const blackKeys: { note: number; name: string; position: number }[] = [];
 
-  for (let oct = 0; oct < 2; oct++) {
+  for (let oct = 0; oct < numOctaves; oct++) {
     for (const idx of WHITE_INDICES) whiteKeys.push({ note: baseNote + oct * 12 + idx, name: NOTE_NAMES[idx] });
     for (const idx of BLACK_INDICES) blackKeys.push({ note: baseNote + oct * 12 + idx, name: NOTE_NAMES[idx], position: BLACK_POSITIONS[idx] + oct * 7 });
   }
 
   const whiteKeyWidth = 100 / whiteKeys.length;
+  const keyHeight = mobileMode ? 110 : 140;
 
   return (
     <div className="w-full select-none">
@@ -189,7 +204,9 @@ const Keyboard: React.FC<KeyboardProps> = ({
         >
           OCT −
         </button>
-        <span className="font-mono-synth text-xs text-foreground">C{octave + 3} – B{octave + 4}</span>
+        <span className="font-mono-synth text-xs text-foreground">
+          C{octave + 3}{mobileMode ? '' : ` – B${octave + 4}`}
+        </span>
         <button
           onClick={() => onOctaveChange(Math.min(4, octave + 1))}
           className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded bg-synth-panel text-synth-panel-foreground font-mono-synth text-sm border border-synth-panel-border active:bg-synth-panel-border"
@@ -200,8 +217,8 @@ const Keyboard: React.FC<KeyboardProps> = ({
 
       <div
         ref={containerRef}
-        className="relative w-full overflow-x-auto"
-        style={{ height: 140, touchAction: 'none' }}
+        className="relative w-full"
+        style={{ height: keyHeight, touchAction: 'none' }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
