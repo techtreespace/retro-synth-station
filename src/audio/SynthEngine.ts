@@ -211,10 +211,26 @@ export class SynthEngine {
         osc.type = this.params.waveform;
         osc.frequency.setValueAtTime(freq, now);
         this.connectLFOToPitch(osc, now);
-        osc.connect(filter);
+
+        // Distortion: osc → waveshaper → distCompGain → filter
+        const waveshaper = this.ctx.createWaveShaper();
+        waveshaper.curve = createDistortionCurve(this.params.distortion);
+        waveshaper.oversample = '4x';
+        const distCompGain = this.ctx.createGain();
+        const outputGain = 1.0 - (this.params.distortion / 100) * 0.35;
+        distCompGain.gain.setValueAtTime(outputGain, now);
+
+        osc.connect(waveshaper);
+        waveshaper.connect(distCompGain);
+        distCompGain.connect(filter);
+
         osc.start(now);
         oscillators.push(osc);
-        allNodes.push(osc);
+        allNodes.push(osc, waveshaper, distCompGain);
+
+        // Store refs for real-time updates
+        voiceExtra.waveshaper = waveshaper;
+        voiceExtra.distCompGain = distCompGain;
         break;
       }
       case 'wavetable': {

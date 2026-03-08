@@ -17,6 +17,7 @@ export const DEFAULT_PARAMS: SynthParams = {
   modWheel: 0,
   waveform: 'sawtooth',
   pulseWidth: 0.5,
+  distortion: 0,
   filterCutoff: 8000,
   filterResonance: 1,
   filterType: 'lowpass',
