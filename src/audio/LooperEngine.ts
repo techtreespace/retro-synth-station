@@ -597,6 +597,7 @@ export class LooperEngine {
       this.masterPauseElapsed = 0;
       this.onMasterRecordingChange?.(false, 0);
     } else {
+      this.masterPendingDownload = true;
       if (this.masterRecorder && (this.masterRecorder.state === 'recording' || this.masterRecorder.state === 'paused')) {
         this.masterRecorder.stop();
       }
