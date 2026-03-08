@@ -38,6 +38,7 @@ export class LooperEngine {
   // BPM
   private bpm = 120;
   private syncToBpm = true;
+  private sequencerStartTime = 0; // AudioContext time when sequencer started
 
   // Callbacks
   private onSlotChange: ((slotIndex: number, slot: LoopSlot) => void) | null = null;
@@ -92,6 +93,15 @@ export class LooperEngine {
   setSyncToBpm(sync: boolean): void { this.syncToBpm = sync; }
   setMetronomeEnabled(enabled: boolean): void { this.metronomeEnabled = enabled; }
   isMetronomeEnabled(): boolean { return this.metronomeEnabled; }
+  setSequencerStartTime(time: number): void { this.sequencerStartTime = time; }
+
+  private getNextBarTime(): number {
+    if (!this.ctx) return 0;
+    const barDuration = this.getBarDuration();
+    const elapsed = this.ctx.currentTime - this.sequencerStartTime;
+    const barsElapsed = Math.floor(elapsed / barDuration);
+    return this.sequencerStartTime + (barsElapsed + 1) * barDuration;
+  }
 
   getSlot(index: number): LoopSlot { return { ...this.slots[index] }; }
   getSlots(): LoopSlot[] { return this.slots.map(s => ({ ...s })); }
@@ -133,42 +143,52 @@ export class LooperEngine {
     const slot = this.slots[index];
     const isOverdub = slot.buffer !== null;
 
-    // Count-in: 4 clicks before recording starts
+    // Schedule recording to start at the next bar boundary
     const beatDuration = 60 / this.bpm;
+    const nextBar = this.syncToBpm ? this.getNextBarTime() : this.ctx.currentTime + 4 * beatDuration;
     const now = this.ctx.currentTime;
+    const waitUntilBar = nextBar - now;
 
-    for (let i = 0; i < 4; i++) {
-      this.playMetronomeClick(now + i * beatDuration, i === 0);
-      setTimeout(() => {
-        this.onCountIn?.(i + 1);
-      }, i * beatDuration * 1000);
+    // Count-in clicks leading up to next bar
+    const beatsUntilBar = Math.round(waitUntilBar / beatDuration);
+    const countInBeats = Math.min(beatsUntilBar, 4);
+    const countInStart = nextBar - countInBeats * beatDuration;
+
+    for (let i = 0; i < countInBeats; i++) {
+      const clickTime = countInStart + i * beatDuration;
+      if (clickTime >= now) {
+        this.playMetronomeClick(clickTime, i === 0);
+        setTimeout(() => {
+          this.onCountIn?.(i + 1);
+        }, (clickTime - now) * 1000);
+      }
     }
 
-    const countInDuration = 4 * beatDuration;
     const recordDuration = this.getBarDuration() * slot.bars;
 
-    await new Promise(resolve => setTimeout(resolve, countInDuration * 1000));
+    // Wait until the next bar boundary
+    await new Promise(resolve => setTimeout(resolve, waitUntilBar * 1000));
 
     if (!this.ctx) return;
 
-    // Use ScriptProcessorNode to capture raw PCM (avoids decodeAudioData issues with webm)
+    // Use ScriptProcessorNode to capture raw PCM — SILENT tap only (no pass-through)
     const bufferSize = 4096;
     const processor = this.ctx.createScriptProcessor(bufferSize, 2, 2);
     this.slotRecordBuffers[index] = [];
 
     processor.onaudioprocess = (e) => {
-      // Capture left channel (mono capture for simplicity, stereo if needed)
+      // Capture left channel only
       const inputL = e.inputBuffer.getChannelData(0);
-      const inputR = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : inputL;
       this.slotRecordBuffers[index].push(new Float32Array(inputL));
-      // Pass through audio (don't mute while recording)
-      e.outputBuffer.getChannelData(0).set(inputL);
-      if (e.outputBuffer.numberOfChannels > 1) {
-        e.outputBuffer.getChannelData(1).set(inputR);
+      // Output silence — do NOT pass through to avoid double monitoring
+      for (let ch = 0; ch < e.outputBuffer.numberOfChannels; ch++) {
+        e.outputBuffer.getChannelData(ch).fill(0);
       }
     };
 
-    // Connect: synthMasterGain → processor → destination (pass-through)
+    // Connect: synthMasterGain → processor → destination
+    // Processor outputs silence so no double audio, but must connect to destination
+    // for ScriptProcessorNode to actually fire onaudioprocess
     this.synthMasterGain.connect(processor);
     processor.connect(this.ctx.destination);
     this.slotRecordProcessors[index] = processor;
@@ -251,11 +271,10 @@ export class LooperEngine {
       source.buffer = this.slots[index].buffer;
       source.connect(this.slotGains[index]!);
 
-      // Calculate start time synced to BPM
+      // Calculate start time synced to BPM using sequencer start reference
       let startTime = this.ctx.currentTime;
       if (this.syncToBpm) {
-        const barDuration = this.getBarDuration();
-        const nextBar = Math.ceil(this.ctx.currentTime / barDuration) * barDuration;
+        const nextBar = this.getNextBarTime();
         startTime = Math.max(nextBar, this.ctx.currentTime + 0.01);
       }
 
