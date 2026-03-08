@@ -300,7 +300,7 @@ export class SynthEngine {
       allNodes.push(lfoAmt);
     }
 
-    this.voices.set(note, { oscillators, gainNode, filter, allNodes });
+    this.voices.set(note, { oscillators, gainNode, filter, waveshaper: wsRef, distCompGain: dcRef, allNodes });
   }
 
   private connectLFOToPitch(osc: OscillatorNode, _now: number): void {

@@ -47,6 +47,14 @@ const OscillatorSection: React.FC<OscillatorSectionProps> = ({ params, onChange 
             </button>
           ))}
         </div>
+        <Knob
+          value={params.distortion}
+          min={0} max={100} step={1}
+          label="Dist"
+          onChange={(v) => onChange({ distortion: v })}
+          size="sm"
+          formatValue={(v) => v.toFixed(0)}
+        />
       </div>
     );
   }
