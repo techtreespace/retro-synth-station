@@ -399,9 +399,23 @@ export class LooperEngine {
     const scheduleLoop = () => {
       if (!this.ctx || !this.slots[index].buffer || this.slots[index].state !== 'playing') return;
 
+      const slot = this.slots[index];
+      const buf = slot.buffer!;
+      const startSec = Math.max(0, slot.startOffset);
+      const endSec = slot.endOffset > startSec ? Math.min(slot.endOffset, buf.duration) : buf.duration;
+      const regionDur = endSec - startSec;
+      if (regionDur <= 0) return;
+
+      const fadeInSec = Math.max(0.02, Math.min(slot.fadeIn, regionDur / 2));
+      const fadeOutSec = Math.max(0.02, Math.min(slot.fadeOut, regionDur / 2));
+
       const source = this.ctx.createBufferSource();
-      source.buffer = this.slots[index].buffer;
-      source.connect(this.slotGains[index]!);
+      source.buffer = buf;
+
+      // Gain envelope for fades
+      const envGain = this.ctx.createGain();
+      source.connect(envGain);
+      envGain.connect(this.slotGains[index]!);
 
       let startTime = this.ctx.currentTime;
       if (this.syncToBpm && this.sequencerPlaying) {
@@ -409,13 +423,17 @@ export class LooperEngine {
         startTime = Math.max(nextBar, this.ctx.currentTime + 0.01);
       }
 
-      const playOffset = Math.max(0, this.slots[index].startOffset);
-      source.start(startTime, playOffset);
+      // Fade in
+      envGain.gain.setValueAtTime(0, startTime);
+      envGain.gain.linearRampToValueAtTime(1.0, startTime + fadeInSec);
+      // Sustain then fade out
+      envGain.gain.setValueAtTime(1.0, startTime + regionDur - fadeOutSec);
+      envGain.gain.linearRampToValueAtTime(0, startTime + regionDur);
+
+      source.start(startTime, startSec, regionDur);
       this.slotSources[index] = source;
 
-      const bufferDuration = source.buffer!.duration - playOffset;
-      const delay = (startTime - this.ctx.currentTime + bufferDuration) * 1000;
-
+      const delay = (startTime - this.ctx.currentTime + regionDur) * 1000;
       this.slotLoopTimers[index] = window.setTimeout(() => {
         scheduleLoop();
       }, delay);
