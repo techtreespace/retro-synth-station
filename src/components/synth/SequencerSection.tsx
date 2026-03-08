@@ -56,7 +56,7 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
     if (!initedRef.current && seqRef.current && synthEngine) {
       const ctx = synthEngine.getAudioContext();
       if (ctx) {
-        seqRef.current.init(ctx, recordingDest);
+        seqRef.current.init(ctx, masterGain || undefined, recordingDest);
         initedRef.current = true;
       }
     }

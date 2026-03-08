@@ -78,9 +78,9 @@ export class SequencerEngine {
     this.trackMuted = DRUM_SOUNDS.map(() => false);
   }
 
-  init(ctx: AudioContext, recordingDest?: AudioNode | null): void {
+  init(ctx: AudioContext, destination?: AudioNode | null, recordingDest?: AudioNode | null): void {
     this.ctx = ctx;
-    this.drumEngine.init(ctx, ctx.destination, recordingDest);
+    this.drumEngine.init(ctx, destination || ctx.destination, recordingDest);
   }
 
   getDrumEngine(): DrumEngine { return this.drumEngine; }
