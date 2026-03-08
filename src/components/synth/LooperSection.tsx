@@ -67,6 +67,7 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
   const [syncToBpm, setSyncToBpm] = useState(true);
   const [metronome, setMetronome] = useState(false);
   const [countIn, setCountIn] = useState(0);
+  const [pendingSlots, setPendingSlots] = useState<boolean[]>([false, false, false, false]);
 
   // Sync settings to engine
   useEffect(() => {
