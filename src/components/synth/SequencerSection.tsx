@@ -44,6 +44,7 @@ const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProp
     DRUM_SOUNDS.forEach(s => vols[s.id] = 0.8);
     return vols as Record<DrumSound, number>;
   });
+  const [trackParams, setTrackParams] = useState<Record<DrumSound, DrumSoundParams>>(() => getDefaultDrumParams());
   const [tapTimes, setTapTimes] = useState<number[]>([]);
 
   const seqRef = useRef<SequencerEngine | null>(null);
