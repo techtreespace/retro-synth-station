@@ -18,6 +18,7 @@ const PATTERN_LENGTHS: (8 | 16 | 32)[] = [8, 16, 32];
 const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initialized, ensureInit }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [bpm, setBpm] = useState(120);
   const [swing, setSwing] = useState(0);
