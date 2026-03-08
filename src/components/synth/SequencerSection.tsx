@@ -349,9 +349,11 @@ const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProp
               playing={playing}
               patternLength={patternLength}
               trackVolumes={trackVolumes}
+              trackParams={trackParams}
               onToggleStep={handleToggleDrumStep}
               onToggleMute={handleToggleMute}
               onTrackVolumeChange={handleTrackVolume}
+              onTrackParamChange={handleTrackParamChange}
             />
           </div>
 
