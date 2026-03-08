@@ -204,6 +204,8 @@ export class SynthEngine {
 
     const oscillators: OscillatorNode[] = [];
     const allNodes: AudioNode[] = [gainNode, filter];
+    let wsRef: WaveShaperNode | undefined;
+    let dcRef: GainNode | undefined;
 
     // Build oscillator(s) based on synth type
     switch (this.params.type) {
@@ -228,10 +230,8 @@ export class SynthEngine {
         osc.start(now);
         oscillators.push(osc);
         allNodes.push(osc, waveshaper, distCompGain);
-
-        // Store refs for real-time updates
-        voiceExtra.waveshaper = waveshaper;
-        voiceExtra.distCompGain = distCompGain;
+        wsRef = waveshaper;
+        dcRef = distCompGain;
         break;
       }
       case 'wavetable': {
