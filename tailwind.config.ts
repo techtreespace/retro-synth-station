@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        display: ["Orbitron", "monospace"],
+        "mono-synth": ["Share Tech Mono", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,6 +61,30 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        synth: {
+          panel: "hsl(var(--synth-panel))",
+          "panel-foreground": "hsl(var(--synth-panel-foreground))",
+          "panel-border": "hsl(var(--synth-panel-border))",
+          surface: "hsl(var(--synth-surface))",
+          "surface-dark": "hsl(var(--synth-surface-dark))",
+        },
+        led: {
+          amber: "hsl(var(--led-amber))",
+          "amber-glow": "hsl(var(--led-amber-glow))",
+          green: "hsl(var(--led-green))",
+          red: "hsl(var(--led-red))",
+        },
+        knob: {
+          body: "hsl(var(--knob-body))",
+          indicator: "hsl(var(--knob-indicator))",
+          ring: "hsl(var(--knob-ring))",
+        },
+        key: {
+          white: "hsl(var(--key-white))",
+          "white-active": "hsl(var(--key-white-active))",
+          black: "hsl(var(--key-black))",
+          "black-active": "hsl(var(--key-black-active))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -65,25 +93,22 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "led-pulse": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.7" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "led-pulse": "led-pulse 2s ease-in-out infinite",
       },
     },
   },
