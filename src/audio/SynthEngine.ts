@@ -22,6 +22,7 @@ export interface SynthParams {
   modWheel: number;
   waveform: WaveformType;
   pulseWidth: number;
+  distortion: number; // 0-100
   filterCutoff: number;
   filterResonance: number;
   filterType: FilterType;
