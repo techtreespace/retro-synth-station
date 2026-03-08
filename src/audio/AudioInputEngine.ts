@@ -212,6 +212,9 @@ export class AudioInputEngine {
       this.monitorGainNode?.disconnect();
       this.muteGainNode?.disconnect();
       this.inputGainNode?.disconnect();
+      this.highEQ?.disconnect();
+      this.midEQ?.disconnect();
+      this.lowEQ?.disconnect();
       this.analyser?.disconnect();
       this.highpassFilter?.disconnect();
       this.sourceNode?.disconnect();
