@@ -130,7 +130,7 @@ export class SynthEngine {
     });
   }
 
-  noteOn(note: number): void {
+  noteOn(note: number, velocity: number = 127): void {
     if (!this.ctx || !this.masterGain) return;
 
     // 1. If already playing, stop it first
@@ -147,12 +147,13 @@ export class SynthEngine {
     const now = this.ctx.currentTime;
     const freq = noteToFreq(note) * Math.pow(2, this.params.pitchBend / 12);
     const { attack, decay, sustain } = this.params.adsr;
+    const velGain = Math.max(0, Math.min(1, velocity / 127));
 
     // Create voice gain
     const gainNode = this.ctx.createGain();
     gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.7, now + Math.max(attack, 0.003));
-    gainNode.gain.linearRampToValueAtTime(Math.max(sustain, 0.001) * 0.7, now + Math.max(attack, 0.003) + Math.max(decay, 0.003));
+    gainNode.gain.linearRampToValueAtTime(0.7 * velGain, now + Math.max(attack, 0.003));
+    gainNode.gain.linearRampToValueAtTime(Math.max(sustain, 0.001) * 0.7 * velGain, now + Math.max(attack, 0.003) + Math.max(decay, 0.003));
 
     // Create filter
     const filter = this.ctx.createBiquadFilter();
