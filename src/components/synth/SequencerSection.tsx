@@ -15,6 +15,7 @@ interface SequencerSectionProps {
   onBpmChange?: (bpm: number) => void;
   onStartTimeChange?: (time: number) => void;
   recordingDest?: AudioNode | null;
+  masterGain?: GainNode | null;
 }
 
 const PATTERN_LENGTHS: (8 | 16 | 32)[] = [8, 16, 32];
