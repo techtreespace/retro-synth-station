@@ -58,6 +58,8 @@ export class LooperEngine {
       bars: 2 as 1 | 2 | 4 | 8,
       volume: 0.8,
       waveformData: [],
+      startOffset: 0,
+      autoTrimOffset: 0,
     }));
   }
 
