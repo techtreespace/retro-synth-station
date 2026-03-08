@@ -116,6 +116,7 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
     if (!window.confirm('Clear all patterns?')) return;
     const seq = seqRef.current;
     if (seq && playing) { seq.stop(); setPlaying(false); }
+    setPaused(false);
     setDrumPattern(createInitialDrumPattern(patternLength));
     setMelodyPattern(createInitialMelodyPattern(patternLength));
     setCurrentStep(0);
