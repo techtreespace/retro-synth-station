@@ -445,8 +445,13 @@ export class LooperEngine {
   }
 
   setSlotStartOffset(index: number, offset: number): void {
-    this.slots[index].startOffset = Math.max(-0.5, Math.min(0.5, offset));
+    const maxOffset = this.slots[index].buffer ? this.slots[index].buffer!.duration * 0.95 : 0;
+    this.slots[index].startOffset = Math.max(0, Math.min(maxOffset, offset));
     this.emitSlot(index);
+  }
+
+  getSlotBufferDuration(index: number): number {
+    return this.slots[index].buffer?.duration ?? 0;
   }
 
   clearSlot(index: number): void {
