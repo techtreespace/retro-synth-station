@@ -9,7 +9,7 @@ export interface LoopSlot {
   bars: 1 | 2 | 4 | 8;
   volume: number;
   waveformData: number[];
-  startOffset: number; // manual start offset in seconds (-0.5 to 0.5)
+  startOffset: number; // manual start offset in seconds (0 to buffer duration)
 }
 
 export class LooperEngine {
