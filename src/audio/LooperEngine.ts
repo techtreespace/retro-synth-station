@@ -58,7 +58,6 @@ export class LooperEngine {
       volume: 0.8,
       waveformData: [],
       startOffset: 0,
-      autoTrimOffset: 0,
     }));
   }
 
