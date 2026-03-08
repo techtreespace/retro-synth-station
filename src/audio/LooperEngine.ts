@@ -36,6 +36,7 @@ export class LooperEngine {
   private masterStreamDest: MediaStreamAudioDestinationNode | null = null;
   private masterRecording = false;
   private masterRecordStart = 0;
+  private masterPendingDownload = false;
 
   // Metronome
   private metronomeEnabled = false;
