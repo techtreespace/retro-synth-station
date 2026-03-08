@@ -365,6 +365,7 @@ const Index: React.FC = () => {
 
       {/* Sequencer */}
       <SequencerSection
+        ref={sequencerRef}
         synthEngine={engineRef.current}
         initialized={initialized}
         ensureInit={ensureInit}
