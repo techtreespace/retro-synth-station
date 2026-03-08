@@ -106,13 +106,28 @@ export class SequencerEngine {
 
   isPlaying(): boolean { return this.playing; }
 
-  start(): void {
+  start(fromStep?: number): void {
     if (!this.ctx || this.playing) return;
     if (this.ctx.state === 'suspended') this.ctx.resume();
     this.playing = true;
-    this.currentStep = 0;
+    if (fromStep !== undefined) {
+      this.currentStep = fromStep;
+    }
     this.nextStepTime = this.ctx.currentTime + 0.05;
     this.schedule();
+  }
+
+  pause(): void {
+    this.playing = false;
+    if (this.timerId !== null) {
+      clearTimeout(this.timerId);
+      this.timerId = null;
+    }
+    if (this.activeMelodyNote !== null && this.onNoteOff) {
+      this.onNoteOff(this.activeMelodyNote);
+      this.activeMelodyNote = null;
+    }
+    // Do NOT reset currentStep
   }
 
   stop(): void {
@@ -128,6 +143,8 @@ export class SequencerEngine {
     this.currentStep = 0;
     this.onStepChange?.(0);
   }
+
+  getCurrentStep(): number { return this.currentStep; }
 
   private schedule(): void {
     if (!this.ctx || !this.playing) return;

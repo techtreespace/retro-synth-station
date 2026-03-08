@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Play, Square, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronRight, Play, Square, Pause } from 'lucide-react';
 import { SequencerEngine, createInitialDrumPattern, createInitialMelodyPattern, DrumPattern, MelodyPattern } from '@/audio/SequencerEngine';
 import { DrumSound, DRUM_SOUNDS } from '@/audio/DrumEngine';
 import { SynthEngine } from '@/audio/SynthEngine';
@@ -18,6 +18,7 @@ const PATTERN_LENGTHS: (8 | 16 | 32)[] = [8, 16, 32];
 const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initialized, ensureInit }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [bpm, setBpm] = useState(120);
   const [swing, setSwing] = useState(0);
@@ -81,33 +82,41 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
     });
   }, [synthEngine]);
 
-  const handlePlayStop = useCallback(async () => {
+  const handlePlay = useCallback(async () => {
     const seq = seqRef.current;
     if (!seq) return;
     if (playing) {
+      // Already playing → stop and reset
       seq.stop();
       setPlaying(false);
+      setPaused(false);
       setCurrentStep(0);
     } else {
       await ensureSeqInit();
-      seq.start();
+      if (paused) {
+        // Resume from paused position
+        seq.start(currentStep);
+      } else {
+        seq.start(0);
+      }
       setPlaying(true);
+      setPaused(false);
     }
-  }, [playing, ensureSeqInit]);
+  }, [playing, paused, currentStep, ensureSeqInit]);
 
-  const handleReset = useCallback(() => {
+  const handlePause = useCallback(() => {
     const seq = seqRef.current;
-    if (seq && playing) {
-      seq.stop();
-      setPlaying(false);
-    }
-    setCurrentStep(0);
+    if (!seq || !playing) return;
+    seq.pause();
+    setPlaying(false);
+    setPaused(true);
   }, [playing]);
 
   const handleClearAll = useCallback(() => {
     if (!window.confirm('Clear all patterns?')) return;
     const seq = seqRef.current;
     if (seq && playing) { seq.stop(); setPlaying(false); }
+    setPaused(false);
     setDrumPattern(createInitialDrumPattern(patternLength));
     setMelodyPattern(createInitialMelodyPattern(patternLength));
     setCurrentStep(0);
@@ -211,9 +220,9 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
         <div className="px-3 pb-3 space-y-4">
           {/* Transport + Global Controls */}
           <div className="flex flex-wrap items-end gap-3">
-            {/* Play/Stop */}
+            {/* Play */}
             <button
-              onClick={handlePlayStop}
+              onClick={handlePlay}
               className={`min-w-[44px] min-h-[44px] px-4 py-2 rounded font-display text-[10px] tracking-wider border transition-colors
                 ${playing
                   ? 'bg-led-green/20 text-led-green border-led-green'
@@ -223,12 +232,17 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
               {playing ? <Square className="w-4 h-4 inline" /> : <Play className="w-4 h-4 inline" />}
             </button>
 
-            {/* Reset */}
+            {/* Pause */}
             <button
-              onClick={handleReset}
-              className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground hover:border-synth-panel-foreground/40 transition-colors"
+              onClick={handlePause}
+              className={`min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border transition-colors
+                ${paused
+                  ? 'bg-led-amber/20 text-led-amber border-led-amber'
+                  : 'bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border hover:border-synth-panel-foreground/40'
+                }`}
+              disabled={!playing}
             >
-              <RotateCcw className="w-4 h-4 inline" />
+              <Pause className="w-4 h-4 inline" />
             </button>
 
             {/* BPM */}
