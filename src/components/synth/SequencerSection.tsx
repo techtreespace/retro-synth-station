@@ -15,11 +15,12 @@ interface SequencerSectionProps {
   onBpmChange?: (bpm: number) => void;
   onStartTimeChange?: (time: number) => void;
   recordingDest?: AudioNode | null;
+  masterGain?: GainNode | null;
 }
 
 const PATTERN_LENGTHS: (8 | 16 | 32)[] = [8, 16, 32];
 
-const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initialized, ensureInit, onPlayingChange, onBpmChange, onStartTimeChange, recordingDest }) => {
+const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initialized, ensureInit, onPlayingChange, onBpmChange, onStartTimeChange, recordingDest, masterGain }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -55,7 +56,7 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
     if (!initedRef.current && seqRef.current && synthEngine) {
       const ctx = synthEngine.getAudioContext();
       if (ctx) {
-        seqRef.current.init(ctx, recordingDest);
+        seqRef.current.init(ctx, masterGain || undefined, recordingDest);
         initedRef.current = true;
       }
     }
