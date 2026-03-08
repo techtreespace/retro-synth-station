@@ -22,6 +22,7 @@ export interface SynthParams {
   modWheel: number;
   waveform: WaveformType;
   pulseWidth: number;
+  distortion: number; // 0-100
   filterCutoff: number;
   filterResonance: number;
   filterType: FilterType;
@@ -42,7 +43,25 @@ interface VoiceNodes {
   oscillators: OscillatorNode[];  // all oscs to stop
   gainNode: GainNode;             // voice amplitude
   filter: BiquadFilterNode;
+  waveshaper?: WaveShaperNode;
+  distCompGain?: GainNode;
   allNodes: AudioNode[];          // everything to disconnect
+}
+
+function createDistortionCurve(amount: number): Float32Array<ArrayBuffer> {
+  const samples = 256;
+  const buffer = new ArrayBuffer(samples * 4);
+  const curve = new Float32Array(buffer);
+  const deg = Math.PI / 180;
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1;
+    if (amount === 0) {
+      curve[i] = x;
+    } else {
+      curve[i] = ((3 + amount) * x * 20 * deg) / (Math.PI + amount * Math.abs(x));
+    }
+  }
+  return curve;
 }
 
 const MAX_VOICES = 8;
@@ -127,6 +146,14 @@ export class SynthEngine {
       voice.filter.frequency.setTargetAtTime(this.params.filterCutoff, now, 0.01);
       voice.filter.Q.setTargetAtTime(this.params.filterResonance, now, 0.01);
       voice.filter.type = this.params.filterType;
+      // Update distortion curve and compensation gain in real time
+      if (voice.waveshaper) {
+        voice.waveshaper.curve = createDistortionCurve(this.params.distortion);
+      }
+      if (voice.distCompGain) {
+        const outputGain = 1.0 - (this.params.distortion / 100) * 0.35;
+        voice.distCompGain.gain.setTargetAtTime(outputGain, now, 0.01);
+      }
     });
   }
 
@@ -177,6 +204,8 @@ export class SynthEngine {
 
     const oscillators: OscillatorNode[] = [];
     const allNodes: AudioNode[] = [gainNode, filter];
+    let wsRef: WaveShaperNode | undefined;
+    let dcRef: GainNode | undefined;
 
     // Build oscillator(s) based on synth type
     switch (this.params.type) {
@@ -185,10 +214,24 @@ export class SynthEngine {
         osc.type = this.params.waveform;
         osc.frequency.setValueAtTime(freq, now);
         this.connectLFOToPitch(osc, now);
-        osc.connect(filter);
+
+        // Distortion: osc → waveshaper → distCompGain → filter
+        const waveshaper = this.ctx.createWaveShaper();
+        waveshaper.curve = createDistortionCurve(this.params.distortion);
+        waveshaper.oversample = '4x';
+        const distCompGain = this.ctx.createGain();
+        const outputGain = 1.0 - (this.params.distortion / 100) * 0.35;
+        distCompGain.gain.setValueAtTime(outputGain, now);
+
+        osc.connect(waveshaper);
+        waveshaper.connect(distCompGain);
+        distCompGain.connect(filter);
+
         osc.start(now);
         oscillators.push(osc);
-        allNodes.push(osc);
+        allNodes.push(osc, waveshaper, distCompGain);
+        wsRef = waveshaper;
+        dcRef = distCompGain;
         break;
       }
       case 'wavetable': {
@@ -257,7 +300,7 @@ export class SynthEngine {
       allNodes.push(lfoAmt);
     }
 
-    this.voices.set(note, { oscillators, gainNode, filter, allNodes });
+    this.voices.set(note, { oscillators, gainNode, filter, waveshaper: wsRef, distCompGain: dcRef, allNodes });
   }
 
   private connectLFOToPitch(osc: OscillatorNode, _now: number): void {
