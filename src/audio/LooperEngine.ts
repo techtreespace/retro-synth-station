@@ -427,7 +427,7 @@ export class LooperEngine {
   }
 
   setSlotStartOffset(index: number, offset: number): void {
-    this.slots[index].startOffset = Math.max(0, Math.min(0.5, offset));
+    this.slots[index].startOffset = Math.max(-0.5, Math.min(0.5, offset));
     this.emitSlot(index);
   }
 
