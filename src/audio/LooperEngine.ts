@@ -341,6 +341,10 @@ export class LooperEngine {
 
     slot.waveformData = this.extractWaveform(slot.buffer!, 64);
     slot.isOverdub = false;
+    // Set endOffset to full buffer if not previously set or if new recording
+    if (!slot.isOverdub || slot.endOffset <= 0) {
+      slot.endOffset = slot.buffer!.duration;
+    }
     this.slotRecordBuffers[index] = [];
 
     // Transition: if was playing before overdub, go back to playing
