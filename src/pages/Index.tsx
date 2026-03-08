@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SynthEngine, SynthParams, SynthType } from '@/audio/SynthEngine';
 import { LooperEngine } from '@/audio/LooperEngine';
+import { AudioInputEngine } from '@/audio/AudioInputEngine';
 import { DEFAULT_PARAMS, PRESETS, Preset } from '@/audio/presets';
 import Knob from '@/components/synth/Knob';
 import WheelControl from '@/components/synth/WheelControl';
@@ -12,6 +13,7 @@ import PresetSelector from '@/components/synth/PresetSelector';
 import Keyboard from '@/components/synth/Keyboard';
 import SequencerSection from '@/components/synth/SequencerSection';
 import LooperSection from '@/components/synth/LooperSection';
+import InputMixer from '@/components/synth/InputMixer';
 import { Circle } from 'lucide-react';
 
 const SYNTH_TYPES: { value: SynthType; label: string }[] = [
