@@ -14,7 +14,7 @@ import Keyboard from '@/components/synth/Keyboard';
 import SequencerSection, { SequencerSectionHandle } from '@/components/synth/SequencerSection';
 import LooperSection from '@/components/synth/LooperSection';
 import InputMixer from '@/components/synth/InputMixer';
-import { Circle, Pause, Play, Eye } from 'lucide-react';
+import { Circle, Pause, Play, Square, Download, Eye } from 'lucide-react';
 
 const SYNTH_TYPES: { value: SynthType; label: string }[] = [
   { value: 'analog', label: 'ANALOG' },
@@ -34,7 +34,7 @@ const Index: React.FC = () => {
   const sequencerRef = useRef<SequencerSectionHandle | null>(null);
 
   // Master recording state machine: 'idle' | 'recording' | 'paused' | 'previewing'
-  type RecState = 'idle' | 'recording' | 'paused' | 'previewing';
+  type RecState = 'idle' | 'recording' | 'paused' | 'stopped' | 'previewing';
   const [recState, setRecState] = useState<RecState>('idle');
   const [masterRecordElapsed, setMasterRecordElapsed] = useState(0);
   const recTimerRef = useRef<number | null>(null);
@@ -173,25 +173,38 @@ const Index: React.FC = () => {
     setRecState('recording');
   }, [startElapsedTimer]);
 
-  // PREVIEW button from paused → previewing
+  // PREVIEW button from paused/stopped → previewing
   const handlePreview = useCallback(async () => {
     if (!looperRef.current) return;
+    const prevState = recState;
     setRecState('previewing');
     await looperRef.current.previewMasterRecording(() => {
-      // On preview end → back to PAUSED, NOT resume sequencer
-      setRecState('paused');
+      // On preview end → back to previous state, NOT resume sequencer
+      setRecState(prevState === 'stopped' ? 'stopped' : 'paused');
     });
-  }, []);
+  }, [recState]);
 
-  // STOP preview → back to paused
+  // STOP preview
   const handleStopPreview = useCallback(() => {
     looperRef.current?.stopMasterPreview();
-    setRecState('paused');
+    // Go back to paused or stopped depending on where we came from
+    setRecState(prev => prev === 'previewing' ? 'paused' : prev);
   }, []);
 
-  // STOP recording entirely
+  // STOP recording → stopped (keeps data, doesn't download yet)
   const handleStopRec = useCallback(() => {
-    looperRef.current?.stopMasterRecording();
+    if (!looperRef.current) return;
+    looperRef.current.pauseMasterRecording(); // pause, don't finalize
+    stopElapsedTimer();
+    // If currently previewing, stop preview first
+    looperRef.current.stopMasterPreview();
+    setRecState('stopped');
+  }, [stopElapsedTimer]);
+
+  // SAVE → finalize and download
+  const handleSaveRec = useCallback(() => {
+    if (!looperRef.current) return;
+    looperRef.current.stopMasterRecording(); // triggers download
     stopElapsedTimer();
     setRecState('idle');
     setMasterRecordElapsed(0);
@@ -224,79 +237,81 @@ const Index: React.FC = () => {
         <div className="flex items-center gap-2">
           <PresetSelector onSelect={handlePreset} currentPreset={currentPreset} />
 
-          {/* Master Recording Controls */}
-          {recState === 'idle' && (
-            <button
-              onClick={handleStartRec}
-              className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-red/10 text-led-red border-led-red/50 hover:bg-led-red/20"
-            >
-              <Circle className="w-3 h-3" />
-              <span>REC</span>
-            </button>
+          {/* Master Recording Transport — all 5 buttons always visible */}
+          {(() => {
+            const isIdle = recState === 'idle';
+            const isRec = recState === 'recording';
+            const isPaused = recState === 'paused';
+            const isStopped = recState === 'stopped';
+            const isPreviewing = recState === 'previewing';
+
+            const recEnabled = isIdle || isPaused;
+            const pauseEnabled = isRec;
+            const stopEnabled = isRec || isPaused || isPreviewing;
+            const previewEnabled = isPaused || isStopped;
+            const saveEnabled = isStopped || isPreviewing;
+
+            const btnBase = "w-[52px] h-[36px] p-0 rounded font-display border transition-colors flex flex-col items-center justify-center";
+            const btnDisabled = "opacity-25 cursor-not-allowed pointer-events-none border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground";
+            const btnAvailable = "opacity-100 cursor-pointer border-led-amber/60 bg-synth-surface-dark text-led-amber hover:bg-led-amber/10";
+            const btnActive = "opacity-100 border-led-amber bg-led-amber/20 text-led-amber";
+
+            return (
+              <div className="flex flex-row gap-1.5 flex-shrink-0">
+                {/* REC */}
+                <button
+                  onClick={recEnabled ? (isPaused ? handleResumeRec : handleStartRec) : undefined}
+                  className={`${btnBase} ${isRec ? `${btnActive} animate-pulse !text-led-red !border-led-red !bg-led-red/20` : recEnabled ? btnAvailable : btnDisabled}`}
+                >
+                  <Circle className="w-3 h-3" fill={isRec ? 'currentColor' : 'none'} />
+                  <span className="text-[8px] tracking-wider leading-none mt-0.5">REC</span>
+                </button>
+
+                {/* PAUSE */}
+                <button
+                  onClick={pauseEnabled ? handlePauseRec : undefined}
+                  className={`${btnBase} ${isPaused ? btnActive : pauseEnabled ? btnAvailable : btnDisabled}`}
+                >
+                  <Pause className="w-3 h-3" />
+                  <span className="text-[8px] tracking-wider leading-none mt-0.5">PAUSE</span>
+                </button>
+
+                {/* STOP */}
+                <button
+                  onClick={stopEnabled ? handleStopRec : undefined}
+                  className={`${btnBase} ${isStopped ? btnActive : stopEnabled ? btnAvailable : btnDisabled}`}
+                >
+                  <Square className="w-3 h-3" />
+                  <span className="text-[8px] tracking-wider leading-none mt-0.5">STOP</span>
+                </button>
+
+                {/* PREVIEW */}
+                <button
+                  onClick={previewEnabled ? handlePreview : isPreviewing ? handleStopPreview : undefined}
+                  className={`${btnBase} ${isPreviewing ? `${btnActive} animate-pulse !text-led-green !border-led-green !bg-led-green/20` : previewEnabled ? btnAvailable : btnDisabled}`}
+                >
+                  <Play className="w-3 h-3" />
+                  <span className="text-[8px] tracking-wider leading-none mt-0.5">{isPreviewing ? 'STOP' : 'PREVIEW'}</span>
+                </button>
+
+                {/* SAVE */}
+                <button
+                  onClick={saveEnabled ? handleSaveRec : undefined}
+                  className={`${btnBase} ${saveEnabled ? btnAvailable : btnDisabled}`}
+                >
+                  <Download className="w-3 h-3" />
+                  <span className="text-[8px] tracking-wider leading-none mt-0.5">SAVE</span>
+                </button>
+              </div>
+            );
+          })()}
+
+          {/* Elapsed time display */}
+          {(recState === 'recording' || recState === 'paused' || recState === 'stopped') && (
+            <span className="font-mono-synth text-[10px] text-led-amber">{formatTime(masterRecordElapsed)}</span>
           )}
 
-          {recState === 'recording' && (
-            <>
-              <button
-                onClick={handlePauseRec}
-                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-amber/20 text-led-amber border-led-amber hover:bg-led-amber/30"
-              >
-                <Pause className="w-3 h-3" />
-              </button>
-              <button
-                onClick={handleStopRec}
-                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-red/30 text-led-red border-led-red animate-pulse"
-              >
-                <Circle className="w-3 h-3" fill="currentColor" />
-                <span>REC</span>
-                <span className="font-mono-synth text-[9px] text-led-red">{formatTime(masterRecordElapsed)}</span>
-              </button>
-            </>
-          )}
 
-          {recState === 'paused' && (
-            <>
-              <button
-                onClick={handleResumeRec}
-                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-red/10 text-led-red border-led-red/50 hover:bg-led-red/20"
-              >
-                <Circle className="w-3 h-3" />
-                <span>REC</span>
-                <span className="font-mono-synth text-[9px] text-led-amber">{formatTime(masterRecordElapsed)}</span>
-              </button>
-              <button
-                onClick={handlePreview}
-                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-synth-surface-dark text-led-green border-synth-panel-border hover:border-led-green/50"
-              >
-                <Eye className="w-3 h-3" />
-                <span>PREVIEW</span>
-              </button>
-              <button
-                onClick={handleStopRec}
-                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border hover:border-led-red/50 hover:text-led-red"
-              >
-                <span>STOP</span>
-              </button>
-            </>
-          )}
-
-          {recState === 'previewing' && (
-            <>
-              <button
-                onClick={handleStopPreview}
-                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-green/20 text-led-green border-led-green animate-pulse"
-              >
-                <Eye className="w-3 h-3" />
-                <span>PLAYING...</span>
-              </button>
-              <button
-                onClick={handleStopRec}
-                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border hover:border-led-red/50 hover:text-led-red"
-              >
-                <span>STOP</span>
-              </button>
-            </>
-          )}
 
           {/* PANIC button */}
           <button
