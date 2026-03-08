@@ -128,12 +128,29 @@ export class AudioInputEngine {
       return;
     }
 
-    // Build audio graph: source → highpass → inputGain → muteGain → masterGain
+    // Build audio graph: source → highpass → lowEQ → midEQ → highEQ → inputGain → muteGain → masterGain
     this.sourceNode = this.ctx.createMediaStreamSource(this.stream);
 
     this.highpassFilter = this.ctx.createBiquadFilter();
     this.highpassFilter.type = 'highpass';
     this.highpassFilter.frequency.value = 80;
+
+    // 3-band EQ
+    this.lowEQ = this.ctx.createBiquadFilter();
+    this.lowEQ.type = 'lowshelf';
+    this.lowEQ.frequency.value = 200;
+    this.lowEQ.gain.value = this.state.eqLow;
+
+    this.midEQ = this.ctx.createBiquadFilter();
+    this.midEQ.type = 'peaking';
+    this.midEQ.frequency.value = 1000;
+    this.midEQ.Q.value = 1.0;
+    this.midEQ.gain.value = this.state.eqMid;
+
+    this.highEQ = this.ctx.createBiquadFilter();
+    this.highEQ.type = 'highshelf';
+    this.highEQ.frequency.value = 4000;
+    this.highEQ.gain.value = this.state.eqHigh;
 
     this.inputGainNode = this.ctx.createGain();
     this.inputGainNode.gain.value = this.state.gain;
@@ -149,9 +166,12 @@ export class AudioInputEngine {
     this.monitorGainNode = this.ctx.createGain();
     this.monitorGainNode.gain.value = 0; // off by default
 
-    // Chain
+    // Chain: source → hp → lowEQ → midEQ → highEQ → inputGain → muteGain
     this.sourceNode.connect(this.highpassFilter);
-    this.highpassFilter.connect(this.inputGainNode);
+    this.highpassFilter.connect(this.lowEQ);
+    this.lowEQ.connect(this.midEQ);
+    this.midEQ.connect(this.highEQ);
+    this.highEQ.connect(this.inputGainNode);
     this.inputGainNode.connect(this.muteGainNode);
 
     // Analyser taps after inputGain (before mute) so level shows even when muted
