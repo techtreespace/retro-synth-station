@@ -88,7 +88,7 @@ const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProp
     if (!seq) return;
     seq.setOnStepChange((step) => setCurrentStep(step));
     seq.setOnNoteOn((note, velocity, duration) => {
-      synthEngine?.noteOn(note);
+      synthEngine?.noteOn(note, velocity);
     });
     seq.setOnNoteOff((note) => {
       synthEngine?.noteOff(note);
