@@ -468,6 +468,9 @@ export class LooperEngine {
       volume: this.slots[index].volume,
       waveformData: [],
       startOffset: 0,
+      endOffset: 0,
+      fadeIn: 0.02,
+      fadeOut: 0.02,
     };
     this.emitSlot(index);
   }
