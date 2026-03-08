@@ -1,4 +1,5 @@
 // Polyphonic Web Audio Synthesizer Engine
+// Complete rewrite with proper voice pool management
 
 export type SynthType = 'analog' | 'wavetable' | 'fm';
 export type WaveformType = 'sine' | 'sawtooth' | 'square' | 'triangle';
@@ -37,24 +38,14 @@ export interface SynthParams {
   fmModAdsr: ADSRParams;
 }
 
-interface Voice {
-  note: number;
-  oscillator?: OscillatorNode;
-  gain: GainNode;
+interface VoiceNodes {
+  oscillators: OscillatorNode[];  // all oscs to stop
+  gainNode: GainNode;             // voice amplitude
   filter: BiquadFilterNode;
-  carrier?: OscillatorNode;
-  modulator?: OscillatorNode;
-  modGain?: GainNode;
-  feedbackGain?: GainNode;
-  feedbackDelay?: DelayNode;
-  wavetableOsc?: OscillatorNode;
-  startTime: number;
-  releasing: boolean;
-  cleanupTimer?: ReturnType<typeof setTimeout>;
+  allNodes: AudioNode[];          // everything to disconnect
 }
 
-const RAMP_TIME = 0.005;
-const GAIN_FLOOR = 0.0001;
+const MAX_VOICES = 8;
 
 function noteToFreq(note: number): number {
   return 440 * Math.pow(2, (note - 69) / 12);
@@ -64,8 +55,6 @@ function generateWavetable(ctx: AudioContext, type: WavetableType, position: num
   const size = 256;
   const real = new Float32Array(size);
   const imag = new Float32Array(size);
-  real[0] = 0;
-  imag[0] = 0;
   const p = Math.max(0, Math.min(1, position));
 
   switch (type) {
@@ -93,10 +82,9 @@ function generateWavetable(ctx: AudioContext, type: WavetableType, position: num
 export class SynthEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
-  private voices: Map<number, Voice> = new Map();
+  private voices: Map<number, VoiceNodes> = new Map();
   private lfo: OscillatorNode | null = null;
   private lfoGain: GainNode | null = null;
-  private maxPolyphony = 4;
   private params: SynthParams;
   private initialized = false;
 
@@ -105,16 +93,16 @@ export class SynthEngine {
   }
 
   async init(): Promise<void> {
-    if (this.initialized) {
-      if (this.ctx?.state === 'suspended') {
-        await this.ctx.resume();
-      }
+    if (this.initialized && this.ctx && this.ctx.state !== 'closed') {
+      if (this.ctx.state === 'suspended') await this.ctx.resume();
       return;
     }
+    this.buildContext();
+    this.initialized = true;
+  }
 
+  private buildContext(): void {
     this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    if (this.ctx.state === 'suspended') await this.ctx.resume();
-
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.value = this.params.masterVolume;
     this.masterGain.connect(this.ctx.destination);
@@ -123,264 +111,224 @@ export class SynthEngine {
     this.lfo.type = 'sine';
     this.lfo.frequency.value = this.params.lfoRate;
     this.lfoGain = this.ctx.createGain();
-    this.lfoGain.gain.value = 0;
+    this.lfoGain.gain.value = 1;
     this.lfo.connect(this.lfoGain);
     this.lfo.start();
-
-    this.initialized = true;
   }
 
   updateParams(newParams: Partial<SynthParams>): void {
     this.params = { ...this.params, ...newParams };
     if (!this.ctx || !this.masterGain) return;
-
     const now = this.ctx.currentTime;
     this.masterGain.gain.setTargetAtTime(this.params.masterVolume, now, 0.01);
     if (this.lfo) this.lfo.frequency.setTargetAtTime(this.params.lfoRate, now, 0.01);
 
     this.voices.forEach((voice) => {
-      if (!voice.releasing) {
-        voice.filter.frequency.setTargetAtTime(this.params.filterCutoff, now, 0.01);
-        voice.filter.Q.setTargetAtTime(this.params.filterResonance, now, 0.01);
-        voice.filter.type = this.params.filterType;
-      }
+      voice.filter.frequency.setTargetAtTime(this.params.filterCutoff, now, 0.01);
+      voice.filter.Q.setTargetAtTime(this.params.filterResonance, now, 0.01);
+      voice.filter.type = this.params.filterType;
     });
   }
 
   noteOn(note: number): void {
     if (!this.ctx || !this.masterGain) return;
 
-    // Bug 2 fix: if note already active, force-stop it first
+    // 1. If already playing, stop it first
     if (this.voices.has(note)) {
-      this.forceStopVoice(note);
+      this.doNoteOff(note);
     }
 
-    // Enforce polyphony
-    if (this.voices.size >= this.maxPolyphony) {
-      const oldest = this.voices.entries().next().value;
-      if (oldest) this.forceStopVoice(oldest[0]);
+    // 2. Steal oldest if at max polyphony
+    if (this.voices.size >= MAX_VOICES) {
+      const oldestKey = this.voices.keys().next().value;
+      if (oldestKey !== undefined) this.doNoteOff(oldestKey);
     }
 
     const now = this.ctx.currentTime;
     const freq = noteToFreq(note) * Math.pow(2, this.params.pitchBend / 12);
+    const { attack, decay, sustain } = this.params.adsr;
 
-    const voice: Voice = {
-      note,
-      gain: this.ctx.createGain(),
-      filter: this.ctx.createBiquadFilter(),
-      startTime: now,
-      releasing: false,
-    };
+    // Create voice gain
+    const gainNode = this.ctx.createGain();
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(0.7, now + Math.max(attack, 0.003));
+    gainNode.gain.linearRampToValueAtTime(Math.max(sustain, 0.001) * 0.7, now + Math.max(attack, 0.003) + Math.max(decay, 0.003));
 
-    voice.filter.type = this.params.filterType;
-    voice.filter.frequency.value = this.params.filterCutoff;
-    voice.filter.Q.value = this.params.filterResonance;
+    // Create filter
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = this.params.filterType;
+    filter.frequency.value = this.params.filterCutoff;
+    filter.Q.value = this.params.filterResonance;
 
-    // Bug 3 fix: use exponentialRampToValueAtTime with GAIN_FLOOR
-    voice.gain.gain.setValueAtTime(GAIN_FLOOR, now);
-    voice.gain.gain.exponentialRampToValueAtTime(1, now + Math.max(this.params.adsr.attack, RAMP_TIME));
-    const sustainLevel = Math.max(this.params.adsr.sustain, GAIN_FLOOR);
-    voice.gain.gain.exponentialRampToValueAtTime(
-      sustainLevel,
-      now + this.params.adsr.attack + Math.max(this.params.adsr.decay, RAMP_TIME)
-    );
+    filter.connect(gainNode);
+    gainNode.connect(this.masterGain);
 
-    voice.filter.connect(voice.gain);
-    voice.gain.connect(this.masterGain!);
+    const oscillators: OscillatorNode[] = [];
+    const allNodes: AudioNode[] = [gainNode, filter];
 
-    if (this.lfoGain && this.params.lfoDepth > 0) {
-      const lfoAmount = this.ctx.createGain();
-      lfoAmount.gain.value = this.params.lfoTarget === 'pitch'
-        ? this.params.lfoDepth * 50 * (1 + this.params.modWheel)
-        : this.params.lfoDepth * 2000 * (1 + this.params.modWheel);
-      this.lfoGain.connect(lfoAmount);
-      if (this.params.lfoTarget === 'filter') {
-        lfoAmount.connect(voice.filter.frequency);
+    // Build oscillator(s) based on synth type
+    switch (this.params.type) {
+      case 'analog': {
+        const osc = this.ctx.createOscillator();
+        osc.type = this.params.waveform;
+        osc.frequency.setValueAtTime(freq, now);
+        this.connectLFOToPitch(osc, now);
+        osc.connect(filter);
+        osc.start(now);
+        oscillators.push(osc);
+        allNodes.push(osc);
+        break;
+      }
+      case 'wavetable': {
+        const osc = this.ctx.createOscillator();
+        const wave = generateWavetable(this.ctx, this.params.wavetableType, this.params.wavetablePosition);
+        osc.setPeriodicWave(wave);
+        osc.frequency.setValueAtTime(freq, now);
+        this.connectLFOToPitch(osc, now);
+        osc.connect(filter);
+        osc.start(now);
+        oscillators.push(osc);
+        allNodes.push(osc);
+        break;
+      }
+      case 'fm': {
+        const carrierFreq = freq * this.params.fmCarrierRatio;
+        const modFreq = freq * this.params.fmModRatio;
+        const modAmt = this.params.fmModIndex * modFreq;
+
+        const modulator = this.ctx.createOscillator();
+        modulator.type = 'sine';
+        modulator.frequency.setValueAtTime(modFreq, now);
+
+        const modGain = this.ctx.createGain();
+        const { attack: mA, decay: mD, sustain: mS } = this.params.fmModAdsr;
+        modGain.gain.setValueAtTime(0, now);
+        modGain.gain.linearRampToValueAtTime(modAmt, now + Math.max(mA, 0.003));
+        modGain.gain.linearRampToValueAtTime(Math.max(modAmt * mS, 0.001), now + Math.max(mA, 0.003) + Math.max(mD, 0.003));
+
+        modulator.connect(modGain);
+
+        const carrier = this.ctx.createOscillator();
+        carrier.type = 'sine';
+        carrier.frequency.setValueAtTime(carrierFreq, now);
+
+        modGain.connect(carrier.frequency);
+        this.connectLFOToPitch(carrier, now);
+        carrier.connect(filter);
+
+        modulator.start(now);
+        carrier.start(now);
+        oscillators.push(modulator, carrier);
+        allNodes.push(modulator, carrier, modGain);
+
+        // Feedback
+        if (this.params.fmFeedback > 0) {
+          const fbGain = this.ctx.createGain();
+          fbGain.gain.value = this.params.fmFeedback * modFreq * 0.5;
+          const fbDelay = this.ctx.createDelay();
+          fbDelay.delayTime.value = 1 / Math.max(modFreq, 20);
+          modulator.connect(fbGain);
+          fbGain.connect(fbDelay);
+          fbDelay.connect(modulator.frequency);
+          allNodes.push(fbGain, fbDelay);
+        }
+        break;
       }
     }
 
-    switch (this.params.type) {
-      case 'analog': this.createAnalogVoice(voice, freq, now); break;
-      case 'wavetable': this.createWavetableVoice(voice, freq, now); break;
-      case 'fm': this.createFMVoice(voice, freq, now); break;
+    // LFO to filter
+    if (this.lfoGain && this.params.lfoDepth > 0 && this.params.lfoTarget === 'filter') {
+      const lfoAmt = this.ctx.createGain();
+      lfoAmt.gain.value = this.params.lfoDepth * 2000 * (1 + this.params.modWheel);
+      this.lfoGain.connect(lfoAmt);
+      lfoAmt.connect(filter.frequency);
+      allNodes.push(lfoAmt);
     }
 
-    this.voices.set(note, voice);
+    this.voices.set(note, { oscillators, gainNode, filter, allNodes });
   }
 
-  private createAnalogVoice(voice: Voice, freq: number, now: number): void {
-    if (!this.ctx) return;
-    voice.oscillator = this.ctx.createOscillator();
-    voice.oscillator.type = this.params.waveform;
-    voice.oscillator.frequency.setValueAtTime(freq, now);
-
-    if (this.lfoGain && this.params.lfoDepth > 0 && this.params.lfoTarget === 'pitch') {
-      const lfoToPitch = this.ctx.createGain();
-      lfoToPitch.gain.value = this.params.lfoDepth * 50;
-      this.lfoGain.connect(lfoToPitch);
-      lfoToPitch.connect(voice.oscillator.frequency);
-    }
-
-    voice.oscillator.connect(voice.filter);
-    voice.oscillator.start(now);
-  }
-
-  private createWavetableVoice(voice: Voice, freq: number, now: number): void {
-    if (!this.ctx) return;
-    voice.wavetableOsc = this.ctx.createOscillator();
-    const wave = generateWavetable(this.ctx, this.params.wavetableType, this.params.wavetablePosition);
-    voice.wavetableOsc.setPeriodicWave(wave);
-    voice.wavetableOsc.frequency.setValueAtTime(freq, now);
-
-    if (this.lfoGain && this.params.lfoDepth > 0 && this.params.lfoTarget === 'pitch') {
-      const lfoToPitch = this.ctx.createGain();
-      lfoToPitch.gain.value = this.params.lfoDepth * 50;
-      this.lfoGain.connect(lfoToPitch);
-      lfoToPitch.connect(voice.wavetableOsc.frequency);
-    }
-
-    voice.wavetableOsc.connect(voice.filter);
-    voice.wavetableOsc.start(now);
-  }
-
-  private createFMVoice(voice: Voice, freq: number, now: number): void {
-    if (!this.ctx) return;
-
-    const carrierFreq = freq * this.params.fmCarrierRatio;
-    const modFreq = freq * this.params.fmModRatio;
-    const modAmt = this.params.fmModIndex * modFreq;
-
-    voice.modulator = this.ctx.createOscillator();
-    voice.modulator.type = 'sine';
-    voice.modulator.frequency.setValueAtTime(modFreq, now);
-
-    voice.modGain = this.ctx.createGain();
-    voice.modGain.gain.setValueAtTime(GAIN_FLOOR, now);
-    voice.modGain.gain.exponentialRampToValueAtTime(
-      Math.max(modAmt, GAIN_FLOOR),
-      now + Math.max(this.params.fmModAdsr.attack, RAMP_TIME)
-    );
-    voice.modGain.gain.exponentialRampToValueAtTime(
-      Math.max(modAmt * this.params.fmModAdsr.sustain, GAIN_FLOOR),
-      now + this.params.fmModAdsr.attack + Math.max(this.params.fmModAdsr.decay, RAMP_TIME)
-    );
-
-    if (this.params.fmFeedback > 0) {
-      voice.feedbackGain = this.ctx.createGain();
-      voice.feedbackGain.gain.value = this.params.fmFeedback * modFreq * 0.5;
-      voice.feedbackDelay = this.ctx.createDelay();
-      voice.feedbackDelay.delayTime.value = 1 / modFreq;
-      voice.modulator.connect(voice.feedbackGain);
-      voice.feedbackGain.connect(voice.feedbackDelay);
-      voice.feedbackDelay.connect(voice.modulator.frequency);
-    }
-
-    voice.carrier = this.ctx.createOscillator();
-    voice.carrier.type = 'sine';
-    voice.carrier.frequency.setValueAtTime(carrierFreq, now);
-
-    voice.modulator.connect(voice.modGain);
-    voice.modGain.connect(voice.carrier.frequency);
-
-    if (this.lfoGain && this.params.lfoDepth > 0 && this.params.lfoTarget === 'pitch') {
-      const lfoToPitch = this.ctx.createGain();
-      lfoToPitch.gain.value = this.params.lfoDepth * 50;
-      this.lfoGain.connect(lfoToPitch);
-      lfoToPitch.connect(voice.carrier.frequency);
-    }
-
-    voice.carrier.connect(voice.filter);
-    voice.modulator.start(now);
-    voice.carrier.start(now);
+  private connectLFOToPitch(osc: OscillatorNode, _now: number): void {
+    if (!this.ctx || !this.lfoGain || this.params.lfoDepth <= 0 || this.params.lfoTarget !== 'pitch') return;
+    const lfoAmt = this.ctx.createGain();
+    lfoAmt.gain.value = this.params.lfoDepth * 50 * (1 + this.params.modWheel);
+    this.lfoGain.connect(lfoAmt);
+    lfoAmt.connect(osc.frequency);
   }
 
   noteOff(note: number): void {
-    const voice = this.voices.get(note);
-    if (!voice || !this.ctx || voice.releasing) return;
-
-    const now = this.ctx.currentTime;
-    const releaseTime = Math.max(this.params.adsr.release, RAMP_TIME);
-
-    voice.releasing = true;
-
-    // Bug 3 fix: exponentialRamp to GAIN_FLOOR instead of linear to 0
-    voice.gain.gain.cancelScheduledValues(now);
-    voice.gain.gain.setValueAtTime(Math.max(voice.gain.gain.value, GAIN_FLOOR), now);
-    voice.gain.gain.exponentialRampToValueAtTime(GAIN_FLOOR, now + releaseTime);
-
-    if (voice.modGain) {
-      voice.modGain.gain.cancelScheduledValues(now);
-      voice.modGain.gain.setValueAtTime(Math.max(voice.modGain.gain.value, GAIN_FLOOR), now);
-      voice.modGain.gain.exponentialRampToValueAtTime(GAIN_FLOOR, now + releaseTime);
-    }
-
-    const stopTime = now + releaseTime + 0.05;
-    voice.cleanupTimer = setTimeout(() => {
-      this.cleanupVoice(voice, note);
-    }, (stopTime - now) * 1000);
+    this.doNoteOff(note);
   }
 
-  /** Immediately kill a voice with a fast ramp (for voice stealing / panic) */
-  private forceStopVoice(note: number): void {
+  private doNoteOff(note: number): void {
     const voice = this.voices.get(note);
-    if (!voice || !this.ctx) return;
+    if (!voice) return; // Guard clause
 
-    if (voice.cleanupTimer) clearTimeout(voice.cleanupTimer);
-
-    const now = this.ctx.currentTime;
-    voice.gain.gain.cancelScheduledValues(now);
-    voice.gain.gain.setValueAtTime(Math.max(voice.gain.gain.value, GAIN_FLOOR), now);
-    voice.gain.gain.exponentialRampToValueAtTime(GAIN_FLOOR, now + RAMP_TIME);
-
-    setTimeout(() => {
-      this.cleanupVoice(voice, note);
-    }, RAMP_TIME * 1000 + 50);
-  }
-
-  private cleanupVoice(voice: Voice, note: number): void {
-    try { voice.oscillator?.stop(); voice.oscillator?.disconnect(); } catch {}
-    try { voice.carrier?.stop(); voice.carrier?.disconnect(); } catch {}
-    try { voice.modulator?.stop(); voice.modulator?.disconnect(); } catch {}
-    try { voice.wavetableOsc?.stop(); voice.wavetableOsc?.disconnect(); } catch {}
-    try { voice.modGain?.disconnect(); } catch {}
-    try { voice.feedbackGain?.disconnect(); voice.feedbackDelay?.disconnect(); } catch {}
-    try { voice.filter.disconnect(); } catch {}
-    try { voice.gain.disconnect(); } catch {}
+    // Remove from map IMMEDIATELY to prevent double-trigger
     this.voices.delete(note);
+
+    if (!this.ctx) {
+      // Context gone, just cleanup
+      this.disconnectVoice(voice);
+      return;
+    }
+
+    const now = this.ctx.currentTime;
+    const release = Math.max(this.params.adsr.release, 0.01);
+
+    // Release envelope
+    voice.gainNode.gain.cancelScheduledValues(now);
+    voice.gainNode.gain.setValueAtTime(Math.max(voice.gainNode.gain.value, 0.0001), now);
+    voice.gainNode.gain.exponentialRampToValueAtTime(0.0001, now + release);
+
+    // Schedule oscillator stop AFTER release
+    const stopTime = now + release + 0.02;
+    for (const osc of voice.oscillators) {
+      try { osc.stop(stopTime); } catch {}
+    }
+
+    // Cleanup after oscillators end
+    const cleanupMs = (release + 0.05) * 1000;
+    setTimeout(() => {
+      this.disconnectVoice(voice);
+    }, cleanupMs);
   }
 
-  panic(): void {
-    if (!this.ctx) return;
-    // Immediately silence everything
-    this.voices.forEach((voice, note) => {
-      if (voice.cleanupTimer) clearTimeout(voice.cleanupTimer);
-      this.cleanupVoice(voice, note);
-    });
-    // Also cut master gain briefly
-    if (this.masterGain) {
-      const now = this.ctx.currentTime;
-      this.masterGain.gain.setValueAtTime(0, now);
-      this.masterGain.gain.setValueAtTime(this.params.masterVolume, now + 0.05);
+  private disconnectVoice(voice: VoiceNodes): void {
+    for (const node of voice.allNodes) {
+      try { node.disconnect(); } catch {}
     }
   }
 
-  /** Release all currently playing notes */
   releaseAll(): void {
     const notes = Array.from(this.voices.keys());
     for (const note of notes) {
-      this.noteOff(note);
+      this.doNoteOff(note);
     }
   }
 
-  getActiveNotes(): number[] {
-    return Array.from(this.voices.keys());
+  panic(): void {
+    // Immediately disconnect everything
+    this.voices.forEach((voice) => {
+      for (const osc of voice.oscillators) {
+        try { osc.stop(); } catch {}
+      }
+      this.disconnectVoice(voice);
+    });
+    this.voices.clear();
+
+    // Nuke and rebuild context
+    if (this.ctx) {
+      try { this.lfo?.stop(); } catch {}
+      try { this.lfo?.disconnect(); } catch {}
+      try { this.lfoGain?.disconnect(); } catch {}
+      try { this.masterGain?.disconnect(); } catch {}
+      this.ctx.close().catch(() => {});
+    }
+    this.buildContext();
   }
 
-  getParams(): SynthParams {
-    return { ...this.params };
-  }
-
-  isInitialized(): boolean {
-    return this.initialized;
-  }
+  getParams(): SynthParams { return { ...this.params }; }
+  isInitialized(): boolean { return this.initialized; }
+  getActiveNoteCount(): number { return this.voices.size; }
 }
