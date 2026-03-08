@@ -471,6 +471,23 @@ export class LooperEngine {
     this.emitSlot(index);
   }
 
+  setSlotEndOffset(index: number, offset: number): void {
+    const buf = this.slots[index].buffer;
+    if (!buf) return;
+    this.slots[index].endOffset = Math.max(this.slots[index].startOffset + 0.05, Math.min(offset, buf.duration));
+    this.emitSlot(index);
+  }
+
+  setSlotFadeIn(index: number, seconds: number): void {
+    this.slots[index].fadeIn = Math.max(0.02, seconds);
+    this.emitSlot(index);
+  }
+
+  setSlotFadeOut(index: number, seconds: number): void {
+    this.slots[index].fadeOut = Math.max(0.02, seconds);
+    this.emitSlot(index);
+  }
+
   getSlotBufferDuration(index: number): number {
     return this.slots[index].buffer?.duration ?? 0;
   }

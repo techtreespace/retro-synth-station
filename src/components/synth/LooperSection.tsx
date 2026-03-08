@@ -41,6 +41,9 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
       volume: 0.8,
       waveformData: [],
       startOffset: 0,
+      endOffset: 0,
+      fadeIn: 0.02,
+      fadeOut: 0.02,
     }))
   );
   const [bufferDurations, setBufferDurations] = useState([0, 0, 0, 0]);
@@ -138,15 +141,6 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
     });
   }, [looperEngine]);
 
-  const handleSlotStartOffset = useCallback((index: number, offsetSeconds: number) => {
-    looperEngine?.setSlotStartOffset(index, offsetSeconds);
-    setSlots(prev => {
-      const next = [...prev];
-      next[index] = { ...next[index], startOffset: offsetSeconds };
-      return next;
-    });
-  }, [looperEngine]);
-
   const handleStopAll = useCallback(() => {
     looperEngine?.stopAllSlots();
   }, [looperEngine]);
@@ -217,6 +211,9 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
               const isPending = pendingSlots[i];
               const duration = bufferDurations[i];
               const startRatio = duration > 0 ? slot.startOffset / duration : 0;
+              const endRatio = duration > 0 ? (slot.endOffset > 0 ? slot.endOffset / duration : 1) : 1;
+              const fadeInRatio = duration > 0 ? slot.fadeIn / duration : 0;
+              const fadeOutRatio = duration > 0 ? slot.fadeOut / duration : 0;
               
               return (
                 <div
@@ -237,13 +234,34 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                     </span>
                   </div>
 
-                  {/* Waveform with start-point editor */}
+                  {/* Waveform with start/end/fade editors */}
                   <div className="bg-synth-surface-dark rounded p-1 mb-2">
                     <WaveformEditor
                       waveformData={slot.waveformData}
                       startOffsetRatio={startRatio}
+                      endOffsetRatio={endRatio}
+                      fadeInRatio={fadeInRatio}
+                      fadeOutRatio={fadeOutRatio}
                       bufferDuration={duration}
-                      onStartOffsetChange={(offsetSec) => handleSlotStartOffset(i, offsetSec)}
+                      syncToBpm={syncToBpm}
+                      bpm={bpm}
+                      isPlaying={isPlaying}
+                      onStartOffsetChange={(sec) => {
+                        looperEngine?.setSlotStartOffset(i, sec);
+                        setSlots(prev => { const n = [...prev]; n[i] = { ...n[i], startOffset: sec }; return n; });
+                      }}
+                      onEndOffsetChange={(sec) => {
+                        looperEngine?.setSlotEndOffset(i, sec);
+                        setSlots(prev => { const n = [...prev]; n[i] = { ...n[i], endOffset: sec }; return n; });
+                      }}
+                      onFadeInChange={(sec) => {
+                        looperEngine?.setSlotFadeIn(i, sec);
+                        setSlots(prev => { const n = [...prev]; n[i] = { ...n[i], fadeIn: sec }; return n; });
+                      }}
+                      onFadeOutChange={(sec) => {
+                        looperEngine?.setSlotFadeOut(i, sec);
+                        setSlots(prev => { const n = [...prev]; n[i] = { ...n[i], fadeOut: sec }; return n; });
+                      }}
                     />
                   </div>
 
