@@ -446,6 +446,5 @@ export class LooperEngine {
     }
     this.metronomeGain?.disconnect();
     this.masterStreamDest?.disconnect();
-    
   }
 }
