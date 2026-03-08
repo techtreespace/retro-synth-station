@@ -126,7 +126,7 @@ const OscillatorSection: React.FC<OscillatorSectionProps> = ({ params, onChange 
             {RATIOS.map(r => (
               <button
                 key={`m${r}`}
-                onClick={() => onChange({ fmModRatio: r })}
+                onClick={() => { console.log('MODULATOR CLICK', r, 'current:', params.fmModRatio); onChange({ fmModRatio: r }); }}
                 className={`min-w-[32px] min-h-[32px] px-1.5 py-1 rounded text-[10px] font-mono-synth border
                   ${params.fmModRatio === r
                     ? 'bg-led-amber/20 text-led-amber border-led-amber'
