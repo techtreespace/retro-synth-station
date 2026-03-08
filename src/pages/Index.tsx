@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SynthEngine, SynthParams, SynthType } from '@/audio/SynthEngine';
 import { LooperEngine } from '@/audio/LooperEngine';
+import { AudioInputEngine } from '@/audio/AudioInputEngine';
 import { DEFAULT_PARAMS, PRESETS, Preset } from '@/audio/presets';
 import Knob from '@/components/synth/Knob';
 import WheelControl from '@/components/synth/WheelControl';
@@ -12,6 +13,7 @@ import PresetSelector from '@/components/synth/PresetSelector';
 import Keyboard from '@/components/synth/Keyboard';
 import SequencerSection from '@/components/synth/SequencerSection';
 import LooperSection from '@/components/synth/LooperSection';
+import InputMixer from '@/components/synth/InputMixer';
 import { Circle } from 'lucide-react';
 
 const SYNTH_TYPES: { value: SynthType; label: string }[] = [
@@ -28,6 +30,7 @@ const Index: React.FC = () => {
   const [initialized, setInitialized] = useState(false);
   const engineRef = useRef<SynthEngine | null>(null);
   const looperRef = useRef<LooperEngine | null>(null);
+  const inputRef = useRef<AudioInputEngine | null>(null);
 
   // Master recording state
   const [masterRecording, setMasterRecording] = useState(false);
@@ -41,9 +44,11 @@ const Index: React.FC = () => {
   useEffect(() => {
     engineRef.current = new SynthEngine(params);
     looperRef.current = new LooperEngine();
+    inputRef.current = new AudioInputEngine();
     return () => {
       engineRef.current?.panic();
       looperRef.current?.destroy();
+      inputRef.current?.destroy();
     };
   }, []);
 
@@ -59,6 +64,11 @@ const Index: React.FC = () => {
         const masterGain = engineRef.current.getMasterGain();
         if (ctx) {
           looperRef.current.init(ctx, ctx.destination, masterGain);
+
+          // Init input engine with same audio context and master gain
+          if (inputRef.current && masterGain) {
+            inputRef.current.init(ctx, masterGain, looperRef.current.getMasterStreamDest());
+          }
         }
       }
     }
@@ -190,6 +200,9 @@ const Index: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {/* Input Mixer */}
+      <InputMixer inputEngine={inputRef.current} initialized={initialized} ensureInit={ensureInit} />
 
       {/* Top controls */}
       <div className="bg-synth-panel p-3 border-b border-synth-panel-border">
