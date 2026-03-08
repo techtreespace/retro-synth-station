@@ -6,44 +6,61 @@ export interface FxSound {
   emoji: string;
 }
 
-export const FX_SOUNDS: FxSound[][] = [
-  // ROW 1: Classic FX
-  [
-    { id: 'laser', label: 'LASER', emoji: '🚀' },
-    { id: 'boom', label: 'BOOM', emoji: '💥' },
-    { id: 'zap', label: 'ZAP', emoji: '⚡' },
-    { id: 'ding', label: 'DING', emoji: '🔔' },
-    { id: 'blip', label: 'BLIP', emoji: '📯' },
-    { id: 'fanfare', label: 'FANFARE', emoji: '🎺' },
-  ],
-  // ROW 2: Sci-fi / Game
-  [
-    { id: 'coin', label: 'COIN', emoji: '👾' },
-    { id: 'phaser', label: 'PHASER', emoji: '🛸' },
-    { id: 'powerup', label: 'POWERUP', emoji: '💫' },
-    { id: 'gameover', label: 'GAMEOVER', emoji: '💀' },
-    { id: 'warp', label: 'WARP', emoji: '🌀' },
-    { id: 'robot', label: 'ROBOT', emoji: '🤖' },
-  ],
-  // ROW 3: DJ / Scratch
-  [
-    { id: 'scratch1', label: 'SCRATCH1', emoji: '🎧' },
-    { id: 'scratch2', label: 'SCRATCH2', emoji: '🎧' },
-    { id: 'rewind', label: 'REWIND', emoji: '🔄' },
-    { id: 'stutter', label: 'STUTTER', emoji: '📻' },
-    { id: 'airhorn', label: 'AIRHORN', emoji: '🔊' },
-    { id: 'whoosh', label: 'WHOOSH', emoji: '🎵' },
-  ],
-  // ROW 4: Fun / Cartoon
-  [
-    { id: 'boing', label: 'BOING', emoji: '🎉' },
-    { id: 'swoosh', label: 'SWOOSH', emoji: '💨' },
-    { id: 'tweet', label: 'TWEET', emoji: '🐦' },
-    { id: 'beep', label: 'BEEP', emoji: '🚗' },
-    { id: 'quack', label: 'QUACK', emoji: '😂' },
-    { id: 'tada', label: 'TADA', emoji: '🎊' },
-  ],
+export interface FxCategory {
+  name: string;
+  icon: string;
+  sounds: FxSound[];
+}
+
+export const FX_CATEGORIES: FxCategory[] = [
+  {
+    name: 'CLASSIC FX', icon: '⚡',
+    sounds: [
+      { id: 'laser', label: 'LASER', emoji: '🚀' },
+      { id: 'boom', label: 'BOOM', emoji: '💥' },
+      { id: 'zap', label: 'ZAP', emoji: '⚡' },
+      { id: 'ding', label: 'DING', emoji: '🔔' },
+      { id: 'blip', label: 'BLIP', emoji: '📯' },
+      { id: 'fanfare', label: 'FANFARE', emoji: '🎺' },
+    ],
+  },
+  {
+    name: 'SCI-FI / GAME', icon: '👾',
+    sounds: [
+      { id: 'coin', label: 'COIN', emoji: '👾' },
+      { id: 'phaser', label: 'PHASER', emoji: '🛸' },
+      { id: 'powerup', label: 'POWERUP', emoji: '💫' },
+      { id: 'gameover', label: 'GAMEOVER', emoji: '💀' },
+      { id: 'warp', label: 'WARP', emoji: '🌀' },
+      { id: 'robot', label: 'ROBOT', emoji: '🤖' },
+    ],
+  },
+  {
+    name: 'DJ / SCRATCH', icon: '🎧',
+    sounds: [
+      { id: 'scratch1', label: 'SCRATCH1', emoji: '🎧' },
+      { id: 'scratch2', label: 'SCRATCH2', emoji: '🎧' },
+      { id: 'rewind', label: 'REWIND', emoji: '🔄' },
+      { id: 'stutter', label: 'STUTTER', emoji: '📻' },
+      { id: 'airhorn', label: 'AIRHORN', emoji: '🔊' },
+      { id: 'whoosh', label: 'WHOOSH', emoji: '🎵' },
+    ],
+  },
+  {
+    name: 'FUN / CARTOON', icon: '🎉',
+    sounds: [
+      { id: 'boing', label: 'BOING', emoji: '🎉' },
+      { id: 'swoosh', label: 'SWOOSH', emoji: '💨' },
+      { id: 'tweet', label: 'TWEET', emoji: '🐦' },
+      { id: 'beep', label: 'BEEP', emoji: '🚗' },
+      { id: 'quack', label: 'QUACK', emoji: '😂' },
+      { id: 'tada', label: 'TADA', emoji: '🎊' },
+    ],
+  },
 ];
+
+// Backward compat
+export const FX_SOUNDS: FxSound[][] = FX_CATEGORIES.map(c => c.sounds);
 
 export class FxEngine {
   private ctx: AudioContext | null = null;

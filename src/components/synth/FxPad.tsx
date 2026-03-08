@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { FxEngine, FX_SOUNDS } from '@/audio/FxEngine';
+import { FxEngine, FX_CATEGORIES } from '@/audio/FxEngine';
 import { SynthEngine } from '@/audio/SynthEngine';
 import Knob from './Knob';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface FxPadProps {
   synthEngine: SynthEngine | null;
@@ -20,6 +21,7 @@ const FxPad: React.FC<FxPadProps> = ({ synthEngine, initialized, ensureInit, rec
   const [activeIds, setActiveIds] = useState<Set<string>>(new Set());
   const fxRef = useRef<FxEngine | null>(null);
   const initedRef = useRef(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!fxRef.current) fxRef.current = new FxEngine();
@@ -61,12 +63,13 @@ const FxPad: React.FC<FxPadProps> = ({ synthEngine, initialized, ensureInit, rec
     });
   }, []);
 
-  // Auto-clear active state after sound finishes
   useEffect(() => {
     if (activeIds.size === 0) return;
     const timer = setTimeout(() => setActiveIds(new Set()), 3000);
     return () => clearTimeout(timer);
   }, [activeIds]);
+
+  const useMobileLayout = mobileGrid || isMobile;
 
   return (
     <div className="bg-synth-panel border-t border-synth-panel-border">
@@ -82,38 +85,71 @@ const FxPad: React.FC<FxPadProps> = ({ synthEngine, initialized, ensureInit, rec
 
       {!collapsed && (
         <div className="px-3 pb-3 space-y-3">
-          {/* Volume control */}
-          <div className="flex items-end gap-3">
-            <Knob value={volume} min={0} max={1} label="FX VOL" onChange={setVolume} size="md" />
+          {/* Header row: title area + volume control top-right */}
+          <div className="flex items-end justify-end">
+            {useMobileLayout ? (
+              <div className="flex items-center gap-2 w-full">
+                <span className="text-[9px] font-mono tracking-wider text-synth-panel-foreground uppercase">FX VOL</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={volume}
+                  onChange={e => setVolume(parseFloat(e.target.value))}
+                  className="flex-1 h-2 accent-led-amber bg-synth-surface-dark rounded-full appearance-none cursor-pointer
+                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-led-amber
+                    [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-led-amber [&::-moz-range-thumb]:border-0"
+                />
+                <span className="text-[9px] font-mono text-synth-panel-foreground w-8 text-right">{Math.round(volume * 100)}%</span>
+              </div>
+            ) : (
+              <Knob value={volume} min={0} max={1} label="FX VOL" onChange={setVolume} size="md" />
+            )}
           </div>
 
-          {/* Button grid */}
-          <div className="space-y-1.5">
-            {FX_SOUNDS.map((row, rowIdx) => (
-              <div key={rowIdx} className="flex gap-1.5 flex-wrap">
-                {row.map(fx => {
-                  const isActive = activeIds.has(fx.id);
-                  return (
-                    <button
-                      key={fx.id}
-                      onPointerDown={(e) => { e.preventDefault(); handlePress(fx.id); }}
-                      onPointerUp={() => handleRelease(fx.id)}
-                      onPointerLeave={() => { if (activeIds.has(fx.id)) handleRelease(fx.id); }}
-                      className={`
-                        w-[70px] h-[70px] rounded-md border-2 transition-all duration-75
-                        flex flex-col items-center justify-center gap-1
-                        select-none touch-manipulation
-                        ${isActive
-                          ? 'bg-led-amber/30 border-led-amber text-led-amber led-glow-sm scale-95'
-                          : 'bg-synth-surface-dark border-led-amber/30 text-synth-panel-foreground hover:border-led-amber/60 hover:bg-synth-surface-dark/80'
-                        }
-                      `}
-                    >
-                      <span className="text-lg leading-none">{fx.emoji}</span>
-                      <span className="text-[8px] font-display tracking-wider leading-none">{fx.label}</span>
-                    </button>
-                  );
-                })}
+          {/* Category groups */}
+          <div className="space-y-0">
+            {FX_CATEGORIES.map((cat, catIdx) => (
+              <div key={cat.name} className="flex flex-col w-full">
+                {/* Divider between categories */}
+                {catIdx > 0 && <div className="w-full h-px bg-led-amber/20 my-2" />}
+
+                {/* Category label */}
+                <span className="text-[10px] tracking-[2px] text-led-amber/70 pl-0.5 mb-1.5 font-display select-none">
+                  {cat.icon} {cat.name}
+                </span>
+
+                {/* Button row */}
+                <div className={`flex gap-1.5 w-full ${useMobileLayout ? 'flex-wrap' : ''}`}>
+                  {cat.sounds.map(fx => {
+                    const isActive = activeIds.has(fx.id);
+                    return (
+                      <button
+                        key={fx.id}
+                        onPointerDown={(e) => { e.preventDefault(); handlePress(fx.id); }}
+                        onPointerUp={() => handleRelease(fx.id)}
+                        onPointerLeave={() => { if (activeIds.has(fx.id)) handleRelease(fx.id); }}
+                        className={`
+                          flex flex-col items-center justify-center gap-1.5
+                          rounded-md border transition-all duration-75
+                          select-none touch-manipulation
+                          ${useMobileLayout
+                            ? 'h-[72px] basis-[calc(50%-3px)] flex-shrink-0'
+                            : 'h-[80px] flex-1 min-w-0'
+                          }
+                          ${isActive
+                            ? 'bg-led-amber/[0.13] border-led-amber-glow text-led-amber'
+                            : 'bg-synth-surface-dark border-led-amber/40 text-synth-panel-foreground hover:border-led-amber hover:bg-synth-surface-dark/80'
+                          }
+                        `}
+                      >
+                        <span className={`leading-none ${useMobileLayout ? 'text-2xl' : 'text-[22px]'}`}>{fx.emoji}</span>
+                        <span className="text-[9px] font-display tracking-[1px] leading-none text-center">{fx.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             ))}
           </div>
