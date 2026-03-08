@@ -22,6 +22,7 @@ interface SequencerSectionProps {
   onStartTimeChange?: (time: number) => void;
   recordingDest?: AudioNode | null;
   masterGain?: GainNode | null;
+  defaultExpanded?: boolean;
 }
 
 const PATTERN_LENGTHS: (8 | 16 | 32)[] = [8, 16, 32];
