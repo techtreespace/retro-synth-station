@@ -215,6 +215,7 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
             {slots.map((slot, i) => {
               const isRecording = slot.state === 'recording';
               const isPlaying = slot.state === 'playing';
+              const isPending = pendingSlots[i];
               
               return (
                 <div
