@@ -31,11 +31,14 @@ const Index: React.FC = () => {
   const engineRef = useRef<SynthEngine | null>(null);
   const looperRef = useRef<LooperEngine | null>(null);
   const inputRef = useRef<AudioInputEngine | null>(null);
+  const sequencerRef = useRef<SequencerSectionHandle | null>(null);
 
-  // Master recording state
-  const [masterRecording, setMasterRecording] = useState(false);
+  // Master recording state machine: 'idle' | 'recording' | 'paused' | 'previewing'
+  type RecState = 'idle' | 'recording' | 'paused' | 'previewing';
+  const [recState, setRecState] = useState<RecState>('idle');
   const [masterRecordElapsed, setMasterRecordElapsed] = useState(0);
   const recTimerRef = useRef<number | null>(null);
+  const seqPausePositionRef = useRef<{ step: number; contextTime: number; bpm: number } | null>(null);
 
   // Sequencer state (for looper sync)
   const [sequencerPlaying, setSequencerPlaying] = useState(false);
