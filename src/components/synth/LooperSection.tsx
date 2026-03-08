@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Circle, Play, Pause, X } from 'lucide-react';
 import { LooperEngine, LoopSlot, SlotState } from '@/audio/LooperEngine';
 import Knob from './Knob';
+import WaveformEditor from './WaveformEditor';
 
 interface LooperSectionProps {
   looperEngine: LooperEngine | null;
@@ -10,28 +11,6 @@ interface LooperSectionProps {
 }
 
 const BAR_OPTIONS: (1 | 2 | 4 | 8)[] = [1, 2, 4, 8];
-
-const WaveformDisplay: React.FC<{ data: number[]; mobile?: boolean }> = ({ data, mobile }) => {
-  const bars = mobile ? data.slice(0, 8) : data;
-  if (bars.length === 0) {
-    return (
-      <div className="h-8 flex items-center justify-center">
-        <span className="font-mono-synth text-[8px] text-synth-panel-foreground/40">NO DATA</span>
-      </div>
-    );
-  }
-  return (
-    <div className="h-8 flex items-end gap-px">
-      {bars.map((v, i) => (
-        <div
-          key={i}
-          className="flex-1 bg-led-amber/70 rounded-t-sm min-w-[2px]"
-          style={{ height: `${Math.max(v * 100, 4)}%` }}
-        />
-      ))}
-    </div>
-  );
-};
 
 const stateLabel = (state: SlotState, isOverdub: boolean, isPending: boolean): string => {
   if (isPending) return 'WAIT...';
@@ -64,10 +43,25 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
       startOffset: 0,
     }))
   );
+  const [bufferDurations, setBufferDurations] = useState([0, 0, 0, 0]);
   const [syncToBpm, setSyncToBpm] = useState(true);
   const [metronome, setMetronome] = useState(false);
   const [countIn, setCountIn] = useState(0);
   const [pendingSlots, setPendingSlots] = useState<boolean[]>([false, false, false, false]);
+
+  // Global double-tap zoom prevention
+  useEffect(() => {
+    let lastTap = 0;
+    const handler = (e: TouchEvent) => {
+      const now = Date.now();
+      if (now - lastTap < 300) {
+        e.preventDefault();
+      }
+      lastTap = now;
+    };
+    document.addEventListener('touchend', handler, { passive: false });
+    return () => document.removeEventListener('touchend', handler);
+  }, []);
 
   // Sync settings to engine
   useEffect(() => {
@@ -91,6 +85,11 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
       setPendingSlots(prev => {
         const next = [...prev];
         next[index] = looperEngine.isSlotPending(index);
+        return next;
+      });
+      setBufferDurations(prev => {
+        const next = [...prev];
+        next[index] = looperEngine.getSlotBufferDuration(index);
         return next;
       });
     });
@@ -139,11 +138,11 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
     });
   }, [looperEngine]);
 
-  const handleSlotStartOffset = useCallback((index: number, offset: number) => {
-    looperEngine?.setSlotStartOffset(index, offset);
+  const handleSlotStartOffset = useCallback((index: number, offsetSeconds: number) => {
+    looperEngine?.setSlotStartOffset(index, offsetSeconds);
     setSlots(prev => {
       const next = [...prev];
-      next[index] = { ...next[index], startOffset: offset };
+      next[index] = { ...next[index], startOffset: offsetSeconds };
       return next;
     });
   }, [looperEngine]);
@@ -216,6 +215,8 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
               const isRecording = slot.state === 'recording';
               const isPlaying = slot.state === 'playing';
               const isPending = pendingSlots[i];
+              const duration = bufferDurations[i];
+              const startRatio = duration > 0 ? slot.startOffset / duration : 0;
               
               return (
                 <div
@@ -236,9 +237,14 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                     </span>
                   </div>
 
-                  {/* Waveform */}
+                  {/* Waveform with start-point editor */}
                   <div className="bg-synth-surface-dark rounded p-1 mb-2">
-                    <WaveformDisplay data={slot.waveformData} />
+                    <WaveformEditor
+                      waveformData={slot.waveformData}
+                      startOffsetRatio={startRatio}
+                      bufferDuration={duration}
+                      onStartOffsetChange={(offsetSec) => handleSlotStartOffset(i, offsetSec)}
+                    />
                   </div>
 
                   {/* Bar selector */}
@@ -297,18 +303,8 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                       <X className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Volume & Start Offset */}
-                    <div className="ml-auto flex items-center gap-1">
-                      <Knob
-                        value={slot.startOffset * 1000}
-                        min={-500}
-                        max={500}
-                        step={1}
-                        label="START"
-                        onChange={(v) => handleSlotStartOffset(i, v / 1000)}
-                        size="sm"
-                        formatValue={(v) => `${Math.round(v)}ms`}
-                      />
+                    {/* Volume */}
+                    <div className="ml-auto">
                       <Knob
                         value={slot.volume}
                         min={0}
