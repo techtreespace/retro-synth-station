@@ -95,6 +95,34 @@ const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProp
     });
   }, [synthEngine]);
 
+  // Expose imperative handle for parent control
+  useImperativeHandle(ref, () => ({
+    pauseSequencer: () => {
+      const seq = seqRef.current;
+      if (!seq || !playing) return null;
+      const ctx = synthEngine?.getAudioContext?.();
+      const position = {
+        step: seq.getCurrentStep(),
+        contextTime: ctx?.currentTime ?? 0,
+        bpm,
+      };
+      seq.pause();
+      setPlaying(false);
+      setPaused(true);
+      return position;
+    },
+    resumeFromPosition: (position: { step: number }) => {
+      const seq = seqRef.current;
+      if (!seq) return;
+      seq.start(position.step);
+      setPlaying(true);
+      setPaused(false);
+      const ctx = synthEngine?.getAudioContext?.();
+      if (ctx) onStartTimeChange?.(ctx.currentTime);
+    },
+    isPlaying: () => playing,
+  }), [playing, bpm, synthEngine, onStartTimeChange]);
+
   // Notify parent of playing/bpm changes
   useEffect(() => { onPlayingChange?.(playing); }, [playing, onPlayingChange]);
   useEffect(() => { onBpmChange?.(bpm); }, [bpm, onBpmChange]);
