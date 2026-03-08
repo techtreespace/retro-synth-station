@@ -146,6 +146,20 @@ export class LooperEngine {
     osc.stop(time + 0.06);
   }
 
+  /** Count-in click — always plays regardless of metronome setting */
+  private playCountInClick(time: number, isAccent: boolean): void {
+    if (!this.ctx || !this.destination) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain);
+    gain.connect(this.destination);
+    osc.frequency.value = isAccent ? 1200 : 800;
+    gain.gain.setValueAtTime(0.3, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+    osc.start(time);
+    osc.stop(time + 0.06);
+  }
+
   // ─── STATE MACHINE ───────────────────────────────────────────────
 
   /**
