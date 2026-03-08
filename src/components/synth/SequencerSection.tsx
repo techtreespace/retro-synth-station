@@ -388,6 +388,8 @@ const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProp
       )}
     </div>
   );
-};
+});
+
+SequencerSection.displayName = 'SequencerSection';
 
 export default SequencerSection;
