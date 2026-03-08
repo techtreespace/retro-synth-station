@@ -82,8 +82,14 @@ const OscillatorSection: React.FC<OscillatorSectionProps> = ({ params, onChange 
   }
 
   // FM
+  const handleRatioClick = (param: 'fmCarrierRatio' | 'fmModRatio', value: number) => (e: React.MouseEvent | React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onChange({ [param]: value });
+  };
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <h3 className="text-[10px] font-display text-led-amber uppercase tracking-widest">FM Synth</h3>
       <div className="flex flex-wrap gap-3">
         <Knob
@@ -101,42 +107,40 @@ const OscillatorSection: React.FC<OscillatorSectionProps> = ({ params, onChange 
           size="sm"
         />
       </div>
-      <div className="flex gap-4">
-        <div>
-          <span className="text-[9px] font-mono-synth text-muted-foreground">CARRIER</span>
-          <div className="flex gap-1 mt-1">
-            {RATIOS.map(r => (
-              <button
-                key={`c${r}`}
-                onClick={() => onChange({ fmCarrierRatio: r })}
-                className={`min-w-[32px] min-h-[32px] px-1.5 py-1 rounded text-[10px] font-mono-synth border
-                  ${params.fmCarrierRatio === r
-                    ? 'bg-led-amber/20 text-led-amber border-led-amber'
-                    : 'bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border'
-                  }`}
-              >
-                {r}x
-              </button>
-            ))}
-          </div>
+      <div className="relative z-10">
+        <span className="text-[9px] font-mono-synth text-muted-foreground">CARRIER</span>
+        <div className="flex gap-1 mt-1">
+          {RATIOS.map(r => (
+            <button
+              key={`c${r}`}
+              onPointerDown={handleRatioClick('fmCarrierRatio', r)}
+              className={`min-w-[32px] min-h-[32px] px-1.5 py-1 rounded text-[10px] font-mono-synth border pointer-events-auto cursor-pointer
+                ${params.fmCarrierRatio === r
+                  ? 'bg-led-amber/20 text-led-amber border-led-amber'
+                  : 'bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border'
+                }`}
+            >
+              {r}x
+            </button>
+          ))}
         </div>
-        <div>
-          <span className="text-[9px] font-mono-synth text-muted-foreground">MODULATOR</span>
-          <div className="flex gap-1 mt-1">
-            {RATIOS.map(r => (
-              <button
-                key={`m${r}`}
-                onClick={() => onChange({ fmModRatio: r })}
-                className={`min-w-[32px] min-h-[32px] px-1.5 py-1 rounded text-[10px] font-mono-synth border
-                  ${params.fmModRatio === r
-                    ? 'bg-led-amber/20 text-led-amber border-led-amber'
-                    : 'bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border'
-                  }`}
-              >
-                {r}x
-              </button>
-            ))}
-          </div>
+      </div>
+      <div className="relative z-10">
+        <span className="text-[9px] font-mono-synth text-muted-foreground">MODULATOR</span>
+        <div className="flex gap-1 mt-1">
+          {RATIOS.map(r => (
+            <button
+              key={`m${r}`}
+              onPointerDown={handleRatioClick('fmModRatio', r)}
+              className={`min-w-[32px] min-h-[32px] px-1.5 py-1 rounded text-[10px] font-mono-synth border pointer-events-auto cursor-pointer
+                ${params.fmModRatio === r
+                  ? 'bg-led-amber/20 text-led-amber border-led-amber'
+                  : 'bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border'
+                }`}
+            >
+              {r}x
+            </button>
+          ))}
         </div>
       </div>
     </div>
