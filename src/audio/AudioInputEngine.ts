@@ -246,6 +246,31 @@ export class AudioInputEngine {
     this.emit();
   }
 
+  setEQ(band: 'low' | 'mid' | 'high', value: number): void {
+    const clamped = Math.max(-12, Math.min(12, value));
+    if (band === 'low') {
+      this.state.eqLow = clamped;
+      if (this.lowEQ) this.lowEQ.gain.value = clamped;
+    } else if (band === 'mid') {
+      this.state.eqMid = clamped;
+      if (this.midEQ) this.midEQ.gain.value = clamped;
+    } else {
+      this.state.eqHigh = clamped;
+      if (this.highEQ) this.highEQ.gain.value = clamped;
+    }
+    this.emit();
+  }
+
+  resetEQ(): void {
+    this.state.eqLow = 0;
+    this.state.eqMid = 0;
+    this.state.eqHigh = 0;
+    if (this.lowEQ) this.lowEQ.gain.value = 0;
+    if (this.midEQ) this.midEQ.gain.value = 0;
+    if (this.highEQ) this.highEQ.gain.value = 0;
+    this.emit();
+  }
+
   setMonitoring(enabled: boolean): void {
     this.state.monitoring = enabled;
     if (this.monitorGainNode) {

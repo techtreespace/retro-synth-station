@@ -23,6 +23,9 @@ const InputMixer: React.FC<InputMixerProps> = ({ inputEngine, initialized, ensur
     selectedDeviceId: null,
     permissionDenied: false,
     noDevice: false,
+    eqLow: 0,
+    eqMid: 0,
+    eqHigh: 0,
   });
   const [showMonitorWarning, setShowMonitorWarning] = useState(false);
   const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
