@@ -11,6 +11,8 @@ interface SequencerSectionProps {
   synthEngine: SynthEngine | null;
   initialized: boolean;
   ensureInit: () => Promise<void>;
+  onPlayingChange?: (playing: boolean) => void;
+  onBpmChange?: (bpm: number) => void;
 }
 
 const PATTERN_LENGTHS: (8 | 16 | 32)[] = [8, 16, 32];
