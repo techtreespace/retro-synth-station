@@ -311,23 +311,7 @@ const Index: React.FC = () => {
             <span className="font-mono-synth text-[10px] text-led-amber">{formatTime(masterRecordElapsed)}</span>
           )}
 
-          {recState === 'previewing' && (
-            <>
-              <button
-                onClick={handleStopPreview}
-                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-green/20 text-led-green border-led-green animate-pulse"
-              >
-                <Eye className="w-3 h-3" />
-                <span>PLAYING...</span>
-              </button>
-              <button
-                onClick={handleStopRec}
-                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border hover:border-led-red/50 hover:text-led-red"
-              >
-                <span>STOP</span>
-              </button>
-            </>
-          )}
+
 
           {/* PANIC button */}
           <button
