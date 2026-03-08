@@ -9,7 +9,7 @@ export interface LoopSlot {
   bars: 1 | 2 | 4 | 8;
   volume: number;
   waveformData: number[];
-  startOffset: number; // manual start offset in seconds (-0.5 to 0.5)
+  startOffset: number; // manual start offset in seconds (0 to buffer duration)
 }
 
 export class LooperEngine {
@@ -403,15 +403,12 @@ export class LooperEngine {
         startTime = Math.max(nextBar, this.ctx.currentTime + 0.01);
       }
 
-      const rawOffset = this.slots[index].startOffset;
-      const playOffset = Math.max(0, rawOffset);
+      const playOffset = Math.max(0, this.slots[index].startOffset);
       source.start(startTime, playOffset);
       this.slotSources[index] = source;
 
-      // Negative offset = start earlier (schedule source earlier)
-      const effectiveStart = rawOffset < 0 ? startTime + rawOffset : startTime;
       const bufferDuration = source.buffer!.duration - playOffset;
-      const delay = (Math.max(effectiveStart, this.ctx.currentTime) - this.ctx.currentTime + bufferDuration) * 1000;
+      const delay = (startTime - this.ctx.currentTime + bufferDuration) * 1000;
 
       this.slotLoopTimers[index] = window.setTimeout(() => {
         scheduleLoop();
@@ -445,8 +442,13 @@ export class LooperEngine {
   }
 
   setSlotStartOffset(index: number, offset: number): void {
-    this.slots[index].startOffset = Math.max(-0.5, Math.min(0.5, offset));
+    const maxOffset = this.slots[index].buffer ? this.slots[index].buffer!.duration * 0.95 : 0;
+    this.slots[index].startOffset = Math.max(0, Math.min(maxOffset, offset));
     this.emitSlot(index);
+  }
+
+  getSlotBufferDuration(index: number): number {
+    return this.slots[index].buffer?.duration ?? 0;
   }
 
   clearSlot(index: number): void {
