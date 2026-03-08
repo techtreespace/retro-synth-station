@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { ChevronDown, ChevronRight, Play, Square, Pause } from 'lucide-react';
 import { SequencerEngine, createInitialDrumPattern, createInitialMelodyPattern, DrumPattern, MelodyPattern } from '@/audio/SequencerEngine';
 import { DrumSound, DRUM_SOUNDS } from '@/audio/DrumEngine';
@@ -6,6 +6,12 @@ import { SynthEngine } from '@/audio/SynthEngine';
 import DrumGrid from './DrumGrid';
 import MelodySequencer from './MelodySequencer';
 import Knob from './Knob';
+
+export interface SequencerSectionHandle {
+  pauseSequencer: () => { step: number; contextTime: number; bpm: number } | null;
+  resumeFromPosition: (position: { step: number }) => void;
+  isPlaying: () => boolean;
+}
 
 interface SequencerSectionProps {
   synthEngine: SynthEngine | null;
@@ -20,7 +26,7 @@ interface SequencerSectionProps {
 
 const PATTERN_LENGTHS: (8 | 16 | 32)[] = [8, 16, 32];
 
-const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initialized, ensureInit, onPlayingChange, onBpmChange, onStartTimeChange, recordingDest, masterGain }) => {
+const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProps>(({ synthEngine, initialized, ensureInit, onPlayingChange, onBpmChange, onStartTimeChange, recordingDest, masterGain }, ref) => {
   const [collapsed, setCollapsed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -88,6 +94,34 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
       synthEngine?.noteOff(note);
     });
   }, [synthEngine]);
+
+  // Expose imperative handle for parent control
+  useImperativeHandle(ref, () => ({
+    pauseSequencer: () => {
+      const seq = seqRef.current;
+      if (!seq || !playing) return null;
+      const ctx = synthEngine?.getAudioContext?.();
+      const position = {
+        step: seq.getCurrentStep(),
+        contextTime: ctx?.currentTime ?? 0,
+        bpm,
+      };
+      seq.pause();
+      setPlaying(false);
+      setPaused(true);
+      return position;
+    },
+    resumeFromPosition: (position: { step: number }) => {
+      const seq = seqRef.current;
+      if (!seq) return;
+      seq.start(position.step);
+      setPlaying(true);
+      setPaused(false);
+      const ctx = synthEngine?.getAudioContext?.();
+      if (ctx) onStartTimeChange?.(ctx.currentTime);
+    },
+    isPlaying: () => playing,
+  }), [playing, bpm, synthEngine, onStartTimeChange]);
 
   // Notify parent of playing/bpm changes
   useEffect(() => { onPlayingChange?.(playing); }, [playing, onPlayingChange]);
@@ -354,6 +388,8 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
       )}
     </div>
   );
-};
+});
+
+SequencerSection.displayName = 'SequencerSection';
 
 export default SequencerSection;

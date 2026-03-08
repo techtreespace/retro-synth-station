@@ -11,10 +11,10 @@ import EnvelopeSection from '@/components/synth/EnvelopeSection';
 import LFOSection from '@/components/synth/LFOSection';
 import PresetSelector from '@/components/synth/PresetSelector';
 import Keyboard from '@/components/synth/Keyboard';
-import SequencerSection from '@/components/synth/SequencerSection';
+import SequencerSection, { SequencerSectionHandle } from '@/components/synth/SequencerSection';
 import LooperSection from '@/components/synth/LooperSection';
 import InputMixer from '@/components/synth/InputMixer';
-import { Circle } from 'lucide-react';
+import { Circle, Pause, Play, Eye } from 'lucide-react';
 
 const SYNTH_TYPES: { value: SynthType; label: string }[] = [
   { value: 'analog', label: 'ANALOG' },
@@ -31,11 +31,14 @@ const Index: React.FC = () => {
   const engineRef = useRef<SynthEngine | null>(null);
   const looperRef = useRef<LooperEngine | null>(null);
   const inputRef = useRef<AudioInputEngine | null>(null);
+  const sequencerRef = useRef<SequencerSectionHandle | null>(null);
 
-  // Master recording state
-  const [masterRecording, setMasterRecording] = useState(false);
+  // Master recording state machine: 'idle' | 'recording' | 'paused' | 'previewing'
+  type RecState = 'idle' | 'recording' | 'paused' | 'previewing';
+  const [recState, setRecState] = useState<RecState>('idle');
   const [masterRecordElapsed, setMasterRecordElapsed] = useState(0);
   const recTimerRef = useRef<number | null>(null);
+  const seqPausePositionRef = useRef<{ step: number; contextTime: number; bpm: number } | null>(null);
 
   // Sequencer state (for looper sync)
   const [sequencerPlaying, setSequencerPlaying] = useState(false);
@@ -123,36 +126,82 @@ const Index: React.FC = () => {
     updateParams({ fmModAdsr });
   }, [updateParams]);
 
-  // Master REC button handler
-  const handleMasterRec = useCallback(async () => {
+  // Elapsed timer helper
+  const startElapsedTimer = useCallback(() => {
+    if (recTimerRef.current) clearInterval(recTimerRef.current);
+    recTimerRef.current = window.setInterval(() => {
+      setMasterRecordElapsed(looperRef.current?.getMasterRecordElapsed() ?? 0);
+    }, 200);
+  }, []);
+
+  const stopElapsedTimer = useCallback(() => {
+    if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null; }
+  }, []);
+
+  // REC button: idle → recording
+  const handleStartRec = useCallback(async () => {
     await ensureInit();
     if (!looperRef.current) return;
+    looperRef.current.startMasterRecording();
+    setRecState('recording');
+    setMasterRecordElapsed(0);
+    startElapsedTimer();
+  }, [ensureInit, startElapsedTimer]);
 
-    if (masterRecording) {
-      looperRef.current.stopMasterRecording();
-      setMasterRecording(false);
-      setMasterRecordElapsed(0);
-      if (recTimerRef.current) {
-        clearInterval(recTimerRef.current);
-        recTimerRef.current = null;
-      }
-    } else {
-      looperRef.current.startMasterRecording();
-      setMasterRecording(true);
-      setMasterRecordElapsed(0);
-      recTimerRef.current = window.setInterval(() => {
-        setMasterRecordElapsed(looperRef.current?.getMasterRecordElapsed() ?? 0);
-      }, 200);
+  // PAUSE button: recording → paused
+  const handlePauseRec = useCallback(() => {
+    if (!looperRef.current) return;
+    looperRef.current.pauseMasterRecording();
+    stopElapsedTimer();
+    // Pause sequencer and store position
+    const pos = sequencerRef.current?.pauseSequencer() ?? null;
+    seqPausePositionRef.current = pos;
+    // Disable input monitoring
+    inputRef.current?.setMonitoring(false);
+    setRecState('paused');
+  }, [stopElapsedTimer]);
+
+  // REC button from paused → resume recording
+  const handleResumeRec = useCallback(() => {
+    if (!looperRef.current) return;
+    looperRef.current.resumeMasterRecording();
+    startElapsedTimer();
+    // Resume sequencer from exact pause position
+    if (seqPausePositionRef.current) {
+      sequencerRef.current?.resumeFromPosition(seqPausePositionRef.current);
     }
-  }, [masterRecording, ensureInit]);
+    setRecState('recording');
+  }, [startElapsedTimer]);
+
+  // PREVIEW button from paused → previewing
+  const handlePreview = useCallback(async () => {
+    if (!looperRef.current) return;
+    setRecState('previewing');
+    await looperRef.current.previewMasterRecording(() => {
+      // On preview end → back to PAUSED, NOT resume sequencer
+      setRecState('paused');
+    });
+  }, []);
+
+  // STOP preview → back to paused
+  const handleStopPreview = useCallback(() => {
+    looperRef.current?.stopMasterPreview();
+    setRecState('paused');
+  }, []);
+
+  // STOP recording entirely
+  const handleStopRec = useCallback(() => {
+    looperRef.current?.stopMasterRecording();
+    stopElapsedTimer();
+    setRecState('idle');
+    setMasterRecordElapsed(0);
+    seqPausePositionRef.current = null;
+  }, [stopElapsedTimer]);
 
   // Cleanup rec timer
   useEffect(() => {
-    return () => {
-      if (recTimerRef.current) clearInterval(recTimerRef.current);
-    };
+    return () => { if (recTimerRef.current) clearInterval(recTimerRef.current); };
   }, []);
-
   const formatTime = (secs: number): string => {
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
@@ -175,21 +224,79 @@ const Index: React.FC = () => {
         <div className="flex items-center gap-2">
           <PresetSelector onSelect={handlePreset} currentPreset={currentPreset} />
 
-          {/* Master REC button */}
-          <button
-            onClick={handleMasterRec}
-            className={`min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors
-              ${masterRecording
-                ? 'bg-led-red/30 text-led-red border-led-red animate-pulse'
-                : 'bg-led-red/10 text-led-red border-led-red/50 hover:bg-led-red/20'
-              }`}
-          >
-            <Circle className="w-3 h-3" fill={masterRecording ? 'currentColor' : 'none'} />
-            <span>REC</span>
-            {masterRecording && (
-              <span className="font-mono-synth text-[9px] text-led-red">{formatTime(masterRecordElapsed)}</span>
-            )}
-          </button>
+          {/* Master Recording Controls */}
+          {recState === 'idle' && (
+            <button
+              onClick={handleStartRec}
+              className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-red/10 text-led-red border-led-red/50 hover:bg-led-red/20"
+            >
+              <Circle className="w-3 h-3" />
+              <span>REC</span>
+            </button>
+          )}
+
+          {recState === 'recording' && (
+            <>
+              <button
+                onClick={handlePauseRec}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-amber/20 text-led-amber border-led-amber hover:bg-led-amber/30"
+              >
+                <Pause className="w-3 h-3" />
+              </button>
+              <button
+                onClick={handleStopRec}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-red/30 text-led-red border-led-red animate-pulse"
+              >
+                <Circle className="w-3 h-3" fill="currentColor" />
+                <span>REC</span>
+                <span className="font-mono-synth text-[9px] text-led-red">{formatTime(masterRecordElapsed)}</span>
+              </button>
+            </>
+          )}
+
+          {recState === 'paused' && (
+            <>
+              <button
+                onClick={handleResumeRec}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-red/10 text-led-red border-led-red/50 hover:bg-led-red/20"
+              >
+                <Circle className="w-3 h-3" />
+                <span>REC</span>
+                <span className="font-mono-synth text-[9px] text-led-amber">{formatTime(masterRecordElapsed)}</span>
+              </button>
+              <button
+                onClick={handlePreview}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-synth-surface-dark text-led-green border-synth-panel-border hover:border-led-green/50"
+              >
+                <Eye className="w-3 h-3" />
+                <span>PREVIEW</span>
+              </button>
+              <button
+                onClick={handleStopRec}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border hover:border-led-red/50 hover:text-led-red"
+              >
+                <span>STOP</span>
+              </button>
+            </>
+          )}
+
+          {recState === 'previewing' && (
+            <>
+              <button
+                onClick={handleStopPreview}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-green/20 text-led-green border-led-green animate-pulse"
+              >
+                <Eye className="w-3 h-3" />
+                <span>PLAYING...</span>
+              </button>
+              <button
+                onClick={handleStopRec}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border hover:border-led-red/50 hover:text-led-red"
+              >
+                <span>STOP</span>
+              </button>
+            </>
+          )}
 
           {/* PANIC button */}
           <button
@@ -262,6 +369,7 @@ const Index: React.FC = () => {
 
       {/* Sequencer */}
       <SequencerSection
+        ref={sequencerRef}
         synthEngine={engineRef.current}
         initialized={initialized}
         ensureInit={ensureInit}
