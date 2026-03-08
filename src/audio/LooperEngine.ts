@@ -9,8 +9,7 @@ export interface LoopSlot {
   bars: 1 | 2 | 4 | 8;
   volume: number;
   waveformData: number[];
-  startOffset: number; // manual start offset in seconds (0-0.5)
-  autoTrimOffset: number; // auto-detected silence trim in seconds
+  startOffset: number; // manual start offset in seconds (-0.5 to 0.5)
 }
 
 export class LooperEngine {
