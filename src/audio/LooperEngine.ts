@@ -9,7 +9,10 @@ export interface LoopSlot {
   bars: 1 | 2 | 4 | 8;
   volume: number;
   waveformData: number[];
-  startOffset: number; // manual start offset in seconds (0 to buffer duration)
+  startOffset: number; // seconds
+  endOffset: number;   // seconds (defaults to buffer duration)
+  fadeIn: number;      // seconds (default 0.02)
+  fadeOut: number;     // seconds (default 0.02)
 }
 
 export class LooperEngine {
@@ -58,6 +61,9 @@ export class LooperEngine {
       volume: 0.8,
       waveformData: [],
       startOffset: 0,
+      endOffset: 0,
+      fadeIn: 0.02,
+      fadeOut: 0.02,
     }));
   }
 
@@ -335,6 +341,10 @@ export class LooperEngine {
 
     slot.waveformData = this.extractWaveform(slot.buffer!, 64);
     slot.isOverdub = false;
+    // Set endOffset to full buffer if not previously set or if new recording
+    if (!slot.isOverdub || slot.endOffset <= 0) {
+      slot.endOffset = slot.buffer!.duration;
+    }
     this.slotRecordBuffers[index] = [];
 
     // Transition: if was playing before overdub, go back to playing
@@ -393,9 +403,23 @@ export class LooperEngine {
     const scheduleLoop = () => {
       if (!this.ctx || !this.slots[index].buffer || this.slots[index].state !== 'playing') return;
 
+      const slot = this.slots[index];
+      const buf = slot.buffer!;
+      const startSec = Math.max(0, slot.startOffset);
+      const endSec = slot.endOffset > startSec ? Math.min(slot.endOffset, buf.duration) : buf.duration;
+      const regionDur = endSec - startSec;
+      if (regionDur <= 0) return;
+
+      const fadeInSec = Math.max(0.02, Math.min(slot.fadeIn, regionDur / 2));
+      const fadeOutSec = Math.max(0.02, Math.min(slot.fadeOut, regionDur / 2));
+
       const source = this.ctx.createBufferSource();
-      source.buffer = this.slots[index].buffer;
-      source.connect(this.slotGains[index]!);
+      source.buffer = buf;
+
+      // Gain envelope for fades
+      const envGain = this.ctx.createGain();
+      source.connect(envGain);
+      envGain.connect(this.slotGains[index]!);
 
       let startTime = this.ctx.currentTime;
       if (this.syncToBpm && this.sequencerPlaying) {
@@ -403,13 +427,17 @@ export class LooperEngine {
         startTime = Math.max(nextBar, this.ctx.currentTime + 0.01);
       }
 
-      const playOffset = Math.max(0, this.slots[index].startOffset);
-      source.start(startTime, playOffset);
+      // Fade in
+      envGain.gain.setValueAtTime(0, startTime);
+      envGain.gain.linearRampToValueAtTime(1.0, startTime + fadeInSec);
+      // Sustain then fade out
+      envGain.gain.setValueAtTime(1.0, startTime + regionDur - fadeOutSec);
+      envGain.gain.linearRampToValueAtTime(0, startTime + regionDur);
+
+      source.start(startTime, startSec, regionDur);
       this.slotSources[index] = source;
 
-      const bufferDuration = source.buffer!.duration - playOffset;
-      const delay = (startTime - this.ctx.currentTime + bufferDuration) * 1000;
-
+      const delay = (startTime - this.ctx.currentTime + regionDur) * 1000;
       this.slotLoopTimers[index] = window.setTimeout(() => {
         scheduleLoop();
       }, delay);
@@ -447,6 +475,23 @@ export class LooperEngine {
     this.emitSlot(index);
   }
 
+  setSlotEndOffset(index: number, offset: number): void {
+    const buf = this.slots[index].buffer;
+    if (!buf) return;
+    this.slots[index].endOffset = Math.max(this.slots[index].startOffset + 0.05, Math.min(offset, buf.duration));
+    this.emitSlot(index);
+  }
+
+  setSlotFadeIn(index: number, seconds: number): void {
+    this.slots[index].fadeIn = Math.max(0.02, seconds);
+    this.emitSlot(index);
+  }
+
+  setSlotFadeOut(index: number, seconds: number): void {
+    this.slots[index].fadeOut = Math.max(0.02, seconds);
+    this.emitSlot(index);
+  }
+
   getSlotBufferDuration(index: number): number {
     return this.slots[index].buffer?.duration ?? 0;
   }
@@ -462,6 +507,9 @@ export class LooperEngine {
       volume: this.slots[index].volume,
       waveformData: [],
       startOffset: 0,
+      endOffset: 0,
+      fadeIn: 0.02,
+      fadeOut: 0.02,
     };
     this.emitSlot(index);
   }
