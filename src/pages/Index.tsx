@@ -316,9 +316,9 @@ const Index: React.FC = () => {
           {/* PANIC button */}
           <button
             onClick={handlePanic}
-            className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border border-led-red bg-led-red/20 text-led-red hover:bg-led-red/40 active:bg-led-red/60 transition-colors"
+            className="min-w-[44px] min-h-[44px] rounded font-display text-[10px] tracking-wider border border-led-red bg-led-red/20 text-led-red hover:bg-led-red/40 active:bg-led-red/60 transition-colors flex items-center justify-center p-0 leading-none"
           >
-            PANIC
+            <span className="block w-full text-center leading-none">PANIC</span>
           </button>
         </div>
       </header>
