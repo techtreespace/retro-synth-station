@@ -13,6 +13,7 @@ interface SequencerSectionProps {
   ensureInit: () => Promise<void>;
   onPlayingChange?: (playing: boolean) => void;
   onBpmChange?: (bpm: number) => void;
+  onStartTimeChange?: (time: number) => void;
   recordingDest?: AudioNode | null;
 }
 
