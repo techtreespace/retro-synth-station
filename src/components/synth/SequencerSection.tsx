@@ -82,27 +82,34 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
     });
   }, [synthEngine]);
 
-  const handlePlayStop = useCallback(async () => {
+  const handlePlay = useCallback(async () => {
     const seq = seqRef.current;
     if (!seq) return;
     if (playing) {
+      // Already playing → stop and reset
       seq.stop();
       setPlaying(false);
+      setPaused(false);
       setCurrentStep(0);
     } else {
       await ensureSeqInit();
-      seq.start();
+      if (paused) {
+        // Resume from paused position
+        seq.start(currentStep);
+      } else {
+        seq.start(0);
+      }
       setPlaying(true);
+      setPaused(false);
     }
-  }, [playing, ensureSeqInit]);
+  }, [playing, paused, currentStep, ensureSeqInit]);
 
-  const handleReset = useCallback(() => {
+  const handlePause = useCallback(() => {
     const seq = seqRef.current;
-    if (seq && playing) {
-      seq.stop();
-      setPlaying(false);
-    }
-    setCurrentStep(0);
+    if (!seq || !playing) return;
+    seq.pause();
+    setPlaying(false);
+    setPaused(true);
   }, [playing]);
 
   const handleClearAll = useCallback(() => {
