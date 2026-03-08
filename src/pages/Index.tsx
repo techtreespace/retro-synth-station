@@ -11,10 +11,10 @@ import EnvelopeSection from '@/components/synth/EnvelopeSection';
 import LFOSection from '@/components/synth/LFOSection';
 import PresetSelector from '@/components/synth/PresetSelector';
 import Keyboard from '@/components/synth/Keyboard';
-import SequencerSection from '@/components/synth/SequencerSection';
+import SequencerSection, { SequencerSectionHandle } from '@/components/synth/SequencerSection';
 import LooperSection from '@/components/synth/LooperSection';
 import InputMixer from '@/components/synth/InputMixer';
-import { Circle } from 'lucide-react';
+import { Circle, Pause, Play, Eye } from 'lucide-react';
 
 const SYNTH_TYPES: { value: SynthType; label: string }[] = [
   { value: 'analog', label: 'ANALOG' },
