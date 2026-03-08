@@ -224,6 +224,9 @@ export class AudioInputEngine {
     this.stream = null;
     this.sourceNode = null;
     this.highpassFilter = null;
+    this.lowEQ = null;
+    this.midEQ = null;
+    this.highEQ = null;
     this.inputGainNode = null;
     this.muteGainNode = null;
     this.analyser = null;
