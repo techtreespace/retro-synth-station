@@ -193,6 +193,11 @@ const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProp
     seqRef.current?.getDrumEngine().setTrackVolume(sound, volume);
   }, []);
 
+  const handleTrackParamChange = useCallback((sound: DrumSound, params: DrumSoundParams) => {
+    setTrackParams(prev => ({ ...prev, [sound]: params }));
+    seqRef.current?.getDrumEngine().setSoundParams(sound, params);
+  }, []);
+
   const handleToggleMelodyStep = useCallback((step: number) => {
     setMelodyPattern(prev => {
       const newSteps = [...prev.steps];
