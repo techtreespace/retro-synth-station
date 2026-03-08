@@ -14,7 +14,7 @@ import Keyboard from '@/components/synth/Keyboard';
 import SequencerSection, { SequencerSectionHandle } from '@/components/synth/SequencerSection';
 import LooperSection from '@/components/synth/LooperSection';
 import InputMixer from '@/components/synth/InputMixer';
-import { Circle, Pause, Play, Eye } from 'lucide-react';
+import { Circle, Pause, Play, Square, Download, Eye } from 'lucide-react';
 
 const SYNTH_TYPES: { value: SynthType; label: string }[] = [
   { value: 'analog', label: 'ANALOG' },
