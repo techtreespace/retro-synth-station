@@ -442,7 +442,6 @@ export class LooperEngine {
       volume: this.slots[index].volume,
       waveformData: [],
       startOffset: 0,
-      autoTrimOffset: 0,
     };
     this.emitSlot(index);
   }
