@@ -21,11 +21,14 @@ export class DrumEngine {
     DRUM_SOUNDS.forEach(s => this.trackVolumes.set(s.id, 0.8));
   }
 
-  init(ctx: AudioContext, destination: AudioNode): void {
+  init(ctx: AudioContext, destination: AudioNode, recordingDest?: AudioNode | null): void {
     this.ctx = ctx;
     this.masterGain = ctx.createGain();
     this.masterGain.gain.value = 0.9;
     this.masterGain.connect(destination);
+    if (recordingDest) {
+      this.masterGain.connect(recordingDest);
+    }
     this.noiseBuffer = this.createNoiseBuffer();
   }
 
