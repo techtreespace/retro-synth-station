@@ -93,6 +93,15 @@ export class LooperEngine {
   setSyncToBpm(sync: boolean): void { this.syncToBpm = sync; }
   setMetronomeEnabled(enabled: boolean): void { this.metronomeEnabled = enabled; }
   isMetronomeEnabled(): boolean { return this.metronomeEnabled; }
+  setSequencerStartTime(time: number): void { this.sequencerStartTime = time; }
+
+  private getNextBarTime(): number {
+    if (!this.ctx) return 0;
+    const barDuration = this.getBarDuration();
+    const elapsed = this.ctx.currentTime - this.sequencerStartTime;
+    const barsElapsed = Math.floor(elapsed / barDuration);
+    return this.sequencerStartTime + (barsElapsed + 1) * barDuration;
+  }
 
   getSlot(index: number): LoopSlot { return { ...this.slots[index] }; }
   getSlots(): LoopSlot[] { return this.slots.map(s => ({ ...s })); }
