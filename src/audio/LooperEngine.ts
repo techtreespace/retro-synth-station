@@ -526,6 +526,7 @@ export class LooperEngine {
 
   getAudioContext(): AudioContext | null { return this.ctx; }
   getMasterStreamDest(): MediaStreamAudioDestinationNode | null { return this.masterStreamDest; }
+  isSlotPending(index: number): boolean { return this.slotPendingRecord[index]; }
 
   private getSupportedMimeType(): string {
     const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];

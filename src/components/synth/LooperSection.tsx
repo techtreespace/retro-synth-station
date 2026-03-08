@@ -231,8 +231,8 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                   {/* Slot header */}
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-display text-xs text-led-amber">{i + 1}</span>
-                    <span className={`font-mono-synth text-[8px] tracking-wider ${stateColor(slot.state)}`}>
-                      {stateLabel(slot.state, slot.isOverdub)}
+                    <span className={`font-mono-synth text-[8px] tracking-wider ${isPending ? 'text-led-amber animate-led-pulse' : stateColor(slot.state)}`}>
+                      {stateLabel(slot.state, slot.isOverdub, isPending)}
                     </span>
                   </div>
 
