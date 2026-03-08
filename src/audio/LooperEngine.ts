@@ -318,11 +318,6 @@ export class LooperEngine {
       slot.buffer = newBuffer;
     }
 
-    // Auto-trim leading silence (only on first recording, not overdub)
-    if (!slot.isOverdub) {
-      slot.autoTrimOffset = this.detectLeadingSilence(slot.buffer!);
-    }
-
     slot.waveformData = this.extractWaveform(slot.buffer!, 64);
     slot.isOverdub = false;
     this.slotRecordBuffers[index] = [];
