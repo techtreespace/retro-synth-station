@@ -13,13 +13,13 @@ export interface LoopSlot {
 export class LooperEngine {
   private ctx: AudioContext | null = null;
   private destination: AudioNode | null = null;
+  private synthMasterGain: GainNode | null = null;
   private slots: LoopSlot[] = [];
   private slotSources: (AudioBufferSourceNode | null)[] = [null, null, null, null];
   private slotGains: (GainNode | null)[] = [null, null, null, null];
   private slotRecorders: (MediaRecorder | null)[] = [null, null, null, null];
   private slotRecordChunks: Blob[][] = [[], [], [], []];
-  private slotStreamDests: (MediaStreamAudioDestinationNode | null)[] = [null, null, null, null];
-  private slotRecordStartTime: number[] = [0, 0, 0, 0];
+  private slotRecordStreamDests: (MediaStreamAudioDestinationNode | null)[] = [null, null, null, null];
   private slotLoopTimers: (number | null)[] = [null, null, null, null];
 
   // Master recording
@@ -28,6 +28,9 @@ export class LooperEngine {
   private masterStreamDest: MediaStreamAudioDestinationNode | null = null;
   private masterRecording = false;
   private masterRecordStart = 0;
+
+  // Capture node - taps into synth output for recording
+  private captureStreamDest: MediaStreamAudioDestinationNode | null = null;
 
   // Metronome
   private metronomeEnabled = false;
@@ -52,12 +55,24 @@ export class LooperEngine {
     }));
   }
 
-  init(ctx: AudioContext, dest: AudioNode): void {
+  init(ctx: AudioContext, dest: AudioNode, synthMasterGain?: GainNode | null): void {
     this.ctx = ctx;
     this.destination = dest;
+    this.synthMasterGain = synthMasterGain || null;
+
+    // Create a capture stream destination that taps the synth output
+    this.captureStreamDest = ctx.createMediaStreamDestination();
+
+    // Connect synth master gain to capture so we can record it
+    if (this.synthMasterGain) {
+      this.synthMasterGain.connect(this.captureStreamDest);
+    }
 
     // Create master stream destination for master recording
     this.masterStreamDest = ctx.createMediaStreamDestination();
+    if (this.synthMasterGain) {
+      this.synthMasterGain.connect(this.masterStreamDest);
+    }
 
     // Create metronome gain
     this.metronomeGain = ctx.createGain();
@@ -120,11 +135,9 @@ export class LooperEngine {
   }
 
   async startSlotRecording(index: number): Promise<void> {
-    if (!this.ctx || !this.destination) return;
+    if (!this.ctx || !this.captureStreamDest) return;
 
     const slot = this.slots[index];
-
-    // If already has content, this is overdub
     const isOverdub = slot.buffer !== null;
 
     // Count-in: 4 clicks before recording starts
@@ -138,7 +151,6 @@ export class LooperEngine {
       }, i * beatDuration * 1000);
     }
 
-    // Start actual recording after count-in
     const countInDuration = 4 * beatDuration;
     const recordDuration = this.getBarDuration() * slot.bars;
 
@@ -146,66 +158,43 @@ export class LooperEngine {
 
     if (!this.ctx) return;
 
-    // Create a stream destination to capture audio
-    const streamDest = this.ctx.createMediaStreamDestination();
-    this.slotStreamDests[index] = streamDest;
-
-    // Connect destination output to the stream for capture
-    // We need to capture via a separate analyser/gain node connected to destination
-    // Instead, use createMediaStreamDestination and route main output through it
-    // For simplicity: capture from a dedicated gain node that mirrors the main output
-    const captureGain = this.ctx.createGain();
-    captureGain.gain.value = 1;
-    captureGain.connect(streamDest);
-
-    // Connect the master gain output to capture
-    // Since we can't tap into existing connections easily,
-    // we'll use the approach of recording via the context destination
-    const masterStreamDest = this.ctx.createMediaStreamDestination();
-    
-    // We need to tap the audio. Connect all slot gains + capture what's playing
-    for (let i = 0; i < 4; i++) {
-      if (this.slotGains[i] && i !== index) {
-        this.slotGains[i]!.connect(masterStreamDest);
-      }
-    }
-
-    // Actually, for slot recording we want to capture the synth output.
-    // The simplest approach: record from the context destination stream.
-    // But that requires user permission. Instead, let's record timing and rebuild.
-    
-    // Simpler approach: Just record raw audio via OfflineAudioContext won't work either.
-    // Let's use MediaRecorder on context.destination if available, or the streamDest approach.
-
-    // Most practical: use the existing audio output via createMediaStreamDestination
-    // We already have masterStreamDest. Let's record from that for the slot.
-    
-    const recorder = new MediaRecorder(this.masterStreamDest!.stream, { mimeType: this.getSupportedMimeType() });
+    // Record from the capture stream dest (which has synth output connected)
+    const recorder = new MediaRecorder(this.captureStreamDest.stream, {
+      mimeType: this.getSupportedMimeType()
+    });
     this.slotRecordChunks[index] = [];
-    
+
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) this.slotRecordChunks[index].push(e.data);
     };
 
     recorder.onstop = async () => {
       const blob = new Blob(this.slotRecordChunks[index], { type: recorder.mimeType });
-      const arrayBuffer = await blob.arrayBuffer();
       try {
+        const arrayBuffer = await blob.arrayBuffer();
         const newBuffer = await this.ctx!.decodeAudioData(arrayBuffer);
-        
+
         if (isOverdub && slot.buffer) {
-          // Mix the existing buffer with the new recording
           const mixed = this.mixBuffers(slot.buffer, newBuffer);
           this.slots[index].buffer = mixed;
         } else {
           this.slots[index].buffer = newBuffer;
         }
-        
-        this.slots[index].waveformData = this.extractWaveform(this.slots[index].buffer!);
+
+        this.slots[index].waveformData = this.extractWaveform(this.slots[index].buffer!, 64);
         this.slots[index].status = 'stopped';
         this.onSlotChange?.(index, { ...this.slots[index] });
       } catch (err) {
         console.error('Failed to decode recorded audio:', err);
+        // If decode fails, create a silent buffer of the correct length as fallback
+        if (this.ctx) {
+          const sampleRate = this.ctx.sampleRate;
+          const length = Math.floor(recordDuration * sampleRate);
+          const silentBuffer = this.ctx.createBuffer(1, length, sampleRate);
+          if (!isOverdub) {
+            this.slots[index].buffer = silentBuffer;
+          }
+        }
         this.slots[index].status = slot.buffer ? 'stopped' : 'empty';
         this.onSlotChange?.(index, { ...this.slots[index] });
       }
@@ -214,9 +203,8 @@ export class LooperEngine {
     this.slotRecorders[index] = recorder;
     this.slots[index].status = isOverdub ? 'overdubbing' : 'recording';
     this.onSlotChange?.(index, { ...this.slots[index] });
-    
-    recorder.start();
-    this.slotRecordStartTime[index] = this.ctx.currentTime;
+
+    recorder.start(100); // collect data every 100ms for more reliable capture
 
     // Auto-stop after loop length
     setTimeout(() => {
@@ -235,30 +223,45 @@ export class LooperEngine {
   startSlotPlayback(index: number): void {
     if (!this.ctx || !this.slots[index].buffer || !this.slotGains[index]) return;
 
+    // Always stop any existing playback first
     this.stopSlotPlayback(index);
-
-    const playLoop = () => {
-      if (!this.ctx || !this.slots[index].buffer || this.slots[index].status !== 'playing') return;
-      
-      const source = this.ctx.createBufferSource();
-      source.buffer = this.slots[index].buffer;
-      source.connect(this.slotGains[index]!);
-      source.start();
-      this.slotSources[index] = source;
-
-      const duration = source.buffer!.duration * 1000;
-      this.slotLoopTimers[index] = window.setTimeout(() => {
-        playLoop();
-      }, duration);
-
-      source.onended = () => {
-        // cleanup handled by timer
-      };
-    };
 
     this.slots[index].status = 'playing';
     this.onSlotChange?.(index, { ...this.slots[index] });
-    playLoop();
+
+    const scheduleLoop = () => {
+      if (!this.ctx || !this.slots[index].buffer || this.slots[index].status !== 'playing') return;
+
+      // Create a fresh AudioBufferSourceNode each time (they are one-shot)
+      const source = this.ctx.createBufferSource();
+      source.buffer = this.slots[index].buffer;
+      source.connect(this.slotGains[index]!);
+
+      // Calculate start time synced to BPM
+      let startTime = this.ctx.currentTime;
+      if (this.syncToBpm) {
+        const barDuration = this.getBarDuration();
+        const nextBar = Math.ceil(this.ctx.currentTime / barDuration) * barDuration;
+        startTime = Math.max(nextBar, this.ctx.currentTime + 0.01);
+      }
+
+      source.start(startTime);
+      this.slotSources[index] = source;
+
+      // Schedule next loop iteration
+      const bufferDuration = source.buffer!.duration;
+      const delay = (startTime - this.ctx.currentTime + bufferDuration) * 1000;
+
+      this.slotLoopTimers[index] = window.setTimeout(() => {
+        scheduleLoop();
+      }, delay);
+
+      source.onended = () => {
+        // Cleanup reference if this source is still the active one
+      };
+    };
+
+    scheduleLoop();
   }
 
   stopSlotPlayback(index: number): void {
@@ -315,12 +318,8 @@ export class LooperEngine {
   startMasterRecording(): void {
     if (!this.ctx || !this.masterStreamDest || this.masterRecording) return;
 
-    // Also need to connect synth engine's output. Since we can't directly,
-    // we'll capture from context.destination via createMediaStreamDestination
-    // which we already set up in init()
-
-    const recorder = new MediaRecorder(this.masterStreamDest.stream, { 
-      mimeType: this.getSupportedMimeType() 
+    const recorder = new MediaRecorder(this.masterStreamDest.stream, {
+      mimeType: this.getSupportedMimeType()
     });
     this.masterRecordChunks = [];
 
@@ -338,7 +337,7 @@ export class LooperEngine {
     this.masterRecorder = recorder;
     this.masterRecording = true;
     this.masterRecordStart = Date.now();
-    recorder.start(250); // collect data every 250ms
+    recorder.start(250);
 
     this.onMasterRecordingChange?.(true, 0);
   }
@@ -405,9 +404,10 @@ export class LooperEngine {
     return mixed;
   }
 
-  private extractWaveform(buffer: AudioBuffer, bars = 32): number[] {
+  private extractWaveform(buffer: AudioBuffer, bars = 64): number[] {
     const data = buffer.getChannelData(0);
     const blockSize = Math.floor(data.length / bars);
+    if (blockSize === 0) return [];
     const waveform: number[] = [];
     for (let i = 0; i < bars; i++) {
       let sum = 0;
@@ -431,5 +431,6 @@ export class LooperEngine {
     }
     this.metronomeGain?.disconnect();
     this.masterStreamDest?.disconnect();
+    this.captureStreamDest?.disconnect();
   }
 }
