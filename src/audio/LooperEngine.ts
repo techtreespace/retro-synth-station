@@ -9,8 +9,7 @@ export interface LoopSlot {
   bars: 1 | 2 | 4 | 8;
   volume: number;
   waveformData: number[];
-  startOffset: number; // manual start offset in seconds (0-0.5)
-  autoTrimOffset: number; // auto-detected silence trim in seconds
+  startOffset: number; // manual start offset in seconds (-0.5 to 0.5)
 }
 
 export class LooperEngine {
@@ -59,7 +58,6 @@ export class LooperEngine {
       volume: 0.8,
       waveformData: [],
       startOffset: 0,
-      autoTrimOffset: 0,
     }));
   }
 
@@ -320,11 +318,6 @@ export class LooperEngine {
       slot.buffer = newBuffer;
     }
 
-    // Auto-trim leading silence (only on first recording, not overdub)
-    if (!slot.isOverdub) {
-      slot.autoTrimOffset = this.detectLeadingSilence(slot.buffer!);
-    }
-
     slot.waveformData = this.extractWaveform(slot.buffer!, 64);
     slot.isOverdub = false;
     this.slotRecordBuffers[index] = [];
@@ -395,12 +388,15 @@ export class LooperEngine {
         startTime = Math.max(nextBar, this.ctx.currentTime + 0.01);
       }
 
-      const playOffset = this.slots[index].startOffset + this.slots[index].autoTrimOffset;
+      const rawOffset = this.slots[index].startOffset;
+      const playOffset = Math.max(0, rawOffset);
       source.start(startTime, playOffset);
       this.slotSources[index] = source;
 
+      // Negative offset = start earlier (schedule source earlier)
+      const effectiveStart = rawOffset < 0 ? startTime + rawOffset : startTime;
       const bufferDuration = source.buffer!.duration - playOffset;
-      const delay = (startTime - this.ctx.currentTime + bufferDuration) * 1000;
+      const delay = (Math.max(effectiveStart, this.ctx.currentTime) - this.ctx.currentTime + bufferDuration) * 1000;
 
       this.slotLoopTimers[index] = window.setTimeout(() => {
         scheduleLoop();
@@ -434,7 +430,7 @@ export class LooperEngine {
   }
 
   setSlotStartOffset(index: number, offset: number): void {
-    this.slots[index].startOffset = Math.max(0, Math.min(0.5, offset));
+    this.slots[index].startOffset = Math.max(-0.5, Math.min(0.5, offset));
     this.emitSlot(index);
   }
 
@@ -449,7 +445,6 @@ export class LooperEngine {
       volume: this.slots[index].volume,
       waveformData: [],
       startOffset: 0,
-      autoTrimOffset: 0,
     };
     this.emitSlot(index);
   }
@@ -555,16 +550,6 @@ export class LooperEngine {
     return mixed;
   }
 
-  private detectLeadingSilence(buffer: AudioBuffer): number {
-    const data = buffer.getChannelData(0);
-    let startSample = 0;
-    const threshold = 0.01;
-    const maxTrim = Math.floor(buffer.sampleRate * 0.2); // 200ms max
-    while (startSample < maxTrim && startSample < data.length && Math.abs(data[startSample]) < threshold) {
-      startSample++;
-    }
-    return startSample / buffer.sampleRate;
-  }
 
   private extractWaveform(buffer: AudioBuffer, bars = 64): number[] {
     const data = buffer.getChannelData(0);
