@@ -17,10 +17,10 @@ export class LooperEngine {
   private slots: LoopSlot[] = [];
   private slotSources: (AudioBufferSourceNode | null)[] = [null, null, null, null];
   private slotGains: (GainNode | null)[] = [null, null, null, null];
-  private slotRecorders: (MediaRecorder | null)[] = [null, null, null, null];
-  private slotRecordChunks: Blob[][] = [[], [], [], []];
-  private slotRecordStreamDests: (MediaStreamAudioDestinationNode | null)[] = [null, null, null, null];
+  private slotRecordProcessors: (ScriptProcessorNode | null)[] = [null, null, null, null];
+  private slotRecordBuffers: Float32Array[][] = [[], [], [], []];
   private slotLoopTimers: (number | null)[] = [null, null, null, null];
+  private slotRecordTimers: (number | null)[] = [null, null, null, null];
 
   // Master recording
   private masterRecorder: MediaRecorder | null = null;
@@ -29,8 +29,7 @@ export class LooperEngine {
   private masterRecording = false;
   private masterRecordStart = 0;
 
-  // Capture node - taps into synth output for recording
-  private captureStreamDest: MediaStreamAudioDestinationNode | null = null;
+  // (captureStreamDest removed — slot recording uses ScriptProcessorNode for raw PCM)
 
   // Metronome
   private metronomeEnabled = false;
@@ -60,13 +59,7 @@ export class LooperEngine {
     this.destination = dest;
     this.synthMasterGain = synthMasterGain || null;
 
-    // Create a capture stream destination that taps the synth output
-    this.captureStreamDest = ctx.createMediaStreamDestination();
-
-    // Connect synth master gain to capture so we can record it
-    if (this.synthMasterGain) {
-      this.synthMasterGain.connect(this.captureStreamDest);
-    }
+    // Slot recording now uses ScriptProcessorNode directly on synthMasterGain
 
     // Create master stream destination for master recording
     this.masterStreamDest = ctx.createMediaStreamDestination();
@@ -135,7 +128,7 @@ export class LooperEngine {
   }
 
   async startSlotRecording(index: number): Promise<void> {
-    if (!this.ctx || !this.captureStreamDest) return;
+    if (!this.ctx || !this.synthMasterGain) return;
 
     const slot = this.slots[index];
     const isOverdub = slot.buffer !== null;
@@ -158,66 +151,87 @@ export class LooperEngine {
 
     if (!this.ctx) return;
 
-    // Record from the capture stream dest (which has synth output connected)
-    const recorder = new MediaRecorder(this.captureStreamDest.stream, {
-      mimeType: this.getSupportedMimeType()
-    });
-    this.slotRecordChunks[index] = [];
+    // Use ScriptProcessorNode to capture raw PCM (avoids decodeAudioData issues with webm)
+    const bufferSize = 4096;
+    const processor = this.ctx.createScriptProcessor(bufferSize, 2, 2);
+    this.slotRecordBuffers[index] = [];
 
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) this.slotRecordChunks[index].push(e.data);
-    };
-
-    recorder.onstop = async () => {
-      const blob = new Blob(this.slotRecordChunks[index], { type: recorder.mimeType });
-      try {
-        const arrayBuffer = await blob.arrayBuffer();
-        const newBuffer = await this.ctx!.decodeAudioData(arrayBuffer);
-
-        if (isOverdub && slot.buffer) {
-          const mixed = this.mixBuffers(slot.buffer, newBuffer);
-          this.slots[index].buffer = mixed;
-        } else {
-          this.slots[index].buffer = newBuffer;
-        }
-
-        this.slots[index].waveformData = this.extractWaveform(this.slots[index].buffer!, 64);
-        this.slots[index].status = 'stopped';
-        this.onSlotChange?.(index, { ...this.slots[index] });
-      } catch (err) {
-        console.error('Failed to decode recorded audio:', err);
-        // If decode fails, create a silent buffer of the correct length as fallback
-        if (this.ctx) {
-          const sampleRate = this.ctx.sampleRate;
-          const length = Math.floor(recordDuration * sampleRate);
-          const silentBuffer = this.ctx.createBuffer(1, length, sampleRate);
-          if (!isOverdub) {
-            this.slots[index].buffer = silentBuffer;
-          }
-        }
-        this.slots[index].status = slot.buffer ? 'stopped' : 'empty';
-        this.onSlotChange?.(index, { ...this.slots[index] });
+    processor.onaudioprocess = (e) => {
+      // Capture left channel (mono capture for simplicity, stereo if needed)
+      const inputL = e.inputBuffer.getChannelData(0);
+      const inputR = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : inputL;
+      this.slotRecordBuffers[index].push(new Float32Array(inputL));
+      // Pass through audio (don't mute while recording)
+      e.outputBuffer.getChannelData(0).set(inputL);
+      if (e.outputBuffer.numberOfChannels > 1) {
+        e.outputBuffer.getChannelData(1).set(inputR);
       }
     };
 
-    this.slotRecorders[index] = recorder;
+    // Connect: synthMasterGain → processor → destination (pass-through)
+    this.synthMasterGain.connect(processor);
+    processor.connect(this.ctx.destination);
+    this.slotRecordProcessors[index] = processor;
+
     this.slots[index].status = isOverdub ? 'overdubbing' : 'recording';
     this.onSlotChange?.(index, { ...this.slots[index] });
 
-    recorder.start(100); // collect data every 100ms for more reliable capture
-
     // Auto-stop after loop length
-    setTimeout(() => {
+    this.slotRecordTimers[index] = window.setTimeout(() => {
       this.stopSlotRecording(index);
     }, recordDuration * 1000);
   }
 
   stopSlotRecording(index: number): void {
-    const recorder = this.slotRecorders[index];
-    if (recorder && recorder.state === 'recording') {
-      recorder.stop();
+    if (!this.ctx) return;
+
+    // Clear timer
+    if (this.slotRecordTimers[index] !== null) {
+      clearTimeout(this.slotRecordTimers[index]!);
+      this.slotRecordTimers[index] = null;
     }
-    this.slotRecorders[index] = null;
+
+    // Disconnect processor
+    const processor = this.slotRecordProcessors[index];
+    if (processor) {
+      try { processor.disconnect(); } catch {}
+      if (this.synthMasterGain) {
+        try { this.synthMasterGain.disconnect(processor); } catch {}
+      }
+      this.slotRecordProcessors[index] = null;
+    }
+
+    // Build AudioBuffer from captured PCM chunks
+    const chunks = this.slotRecordBuffers[index];
+    if (chunks.length === 0) {
+      this.slots[index].status = this.slots[index].buffer ? 'stopped' : 'empty';
+      this.onSlotChange?.(index, { ...this.slots[index] });
+      return;
+    }
+
+    const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+    const merged = new Float32Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    const newBuffer = this.ctx.createBuffer(1, totalLength, this.ctx.sampleRate);
+    newBuffer.getChannelData(0).set(merged);
+
+    const slot = this.slots[index];
+    if (slot.buffer) {
+      // Overdub: mix existing + new
+      this.slots[index].buffer = this.mixBuffers(slot.buffer, newBuffer);
+    } else {
+      this.slots[index].buffer = newBuffer;
+    }
+
+    this.slots[index].waveformData = this.extractWaveform(this.slots[index].buffer!, 64);
+    this.slots[index].status = 'stopped';
+    this.slotRecordBuffers[index] = [];
+    this.onSlotChange?.(index, { ...this.slots[index] });
   }
 
   startSlotPlayback(index: number): void {
@@ -329,7 +343,8 @@ export class LooperEngine {
 
     recorder.onstop = () => {
       const blob = new Blob(this.masterRecordChunks, { type: recorder.mimeType });
-      this.downloadBlob(blob, `retrosynth_${Date.now()}.wav`);
+      const ext = recorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
+      this.downloadBlob(blob, `retrosynth_${Date.now()}.${ext}`);
       this.masterRecording = false;
       this.onMasterRecordingChange?.(false, 0);
     };
@@ -431,6 +446,5 @@ export class LooperEngine {
     }
     this.metronomeGain?.disconnect();
     this.masterStreamDest?.disconnect();
-    this.captureStreamDest?.disconnect();
   }
 }
