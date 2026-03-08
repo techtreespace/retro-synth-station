@@ -331,4 +331,6 @@ export class SynthEngine {
   getParams(): SynthParams { return { ...this.params }; }
   isInitialized(): boolean { return this.initialized; }
   getActiveNoteCount(): number { return this.voices.size; }
+  getAudioContext(): AudioContext | null { return this.ctx; }
+  getMasterGain(): GainNode | null { return this.masterGain; }
 }

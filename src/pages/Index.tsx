@@ -53,10 +53,13 @@ const Index: React.FC = () => {
       await engineRef.current.init();
       setInitialized(true);
 
-      // Init looper with a shared audio context
-      if (looperRef.current) {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        looperRef.current.init(ctx, ctx.destination);
+      // Init looper with the synth's shared audio context and master gain
+      if (looperRef.current && engineRef.current) {
+        const ctx = engineRef.current.getAudioContext();
+        const masterGain = engineRef.current.getMasterGain();
+        if (ctx) {
+          looperRef.current.init(ctx, ctx.destination, masterGain);
+        }
       }
     }
   }, [initialized]);
