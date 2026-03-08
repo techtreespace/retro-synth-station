@@ -396,6 +396,15 @@ const Index: React.FC = () => {
         masterGain={engineRef.current?.getMasterGain() || null}
       />
 
+      {/* FX Pad */}
+      <FxPad
+        synthEngine={engineRef.current}
+        initialized={initialized}
+        ensureInit={ensureInit}
+        recordingDest={looperRef.current?.getMasterStreamDest() || null}
+        masterGain={engineRef.current?.getMasterGain() || null}
+      />
+
       {/* Looper */}
       <LooperSection
         looperEngine={looperRef.current}
