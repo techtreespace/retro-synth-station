@@ -220,21 +220,79 @@ const Index: React.FC = () => {
         <div className="flex items-center gap-2">
           <PresetSelector onSelect={handlePreset} currentPreset={currentPreset} />
 
-          {/* Master REC button */}
-          <button
-            onClick={handleMasterRec}
-            className={`min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors
-              ${masterRecording
-                ? 'bg-led-red/30 text-led-red border-led-red animate-pulse'
-                : 'bg-led-red/10 text-led-red border-led-red/50 hover:bg-led-red/20'
-              }`}
-          >
-            <Circle className="w-3 h-3" fill={masterRecording ? 'currentColor' : 'none'} />
-            <span>REC</span>
-            {masterRecording && (
-              <span className="font-mono-synth text-[9px] text-led-red">{formatTime(masterRecordElapsed)}</span>
-            )}
-          </button>
+          {/* Master Recording Controls */}
+          {recState === 'idle' && (
+            <button
+              onClick={handleStartRec}
+              className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-red/10 text-led-red border-led-red/50 hover:bg-led-red/20"
+            >
+              <Circle className="w-3 h-3" />
+              <span>REC</span>
+            </button>
+          )}
+
+          {recState === 'recording' && (
+            <>
+              <button
+                onClick={handlePauseRec}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-amber/20 text-led-amber border-led-amber hover:bg-led-amber/30"
+              >
+                <Pause className="w-3 h-3" />
+              </button>
+              <button
+                onClick={handleStopRec}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-red/30 text-led-red border-led-red animate-pulse"
+              >
+                <Circle className="w-3 h-3" fill="currentColor" />
+                <span>REC</span>
+                <span className="font-mono-synth text-[9px] text-led-red">{formatTime(masterRecordElapsed)}</span>
+              </button>
+            </>
+          )}
+
+          {recState === 'paused' && (
+            <>
+              <button
+                onClick={handleResumeRec}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-red/10 text-led-red border-led-red/50 hover:bg-led-red/20"
+              >
+                <Circle className="w-3 h-3" />
+                <span>REC</span>
+                <span className="font-mono-synth text-[9px] text-led-amber">{formatTime(masterRecordElapsed)}</span>
+              </button>
+              <button
+                onClick={handlePreview}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-synth-surface-dark text-led-green border-synth-panel-border hover:border-led-green/50"
+              >
+                <Eye className="w-3 h-3" />
+                <span>PREVIEW</span>
+              </button>
+              <button
+                onClick={handleStopRec}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border hover:border-led-red/50 hover:text-led-red"
+              >
+                <span>STOP</span>
+              </button>
+            </>
+          )}
+
+          {recState === 'previewing' && (
+            <>
+              <button
+                onClick={handleStopPreview}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-led-green/20 text-led-green border-led-green animate-pulse"
+              >
+                <Eye className="w-3 h-3" />
+                <span>PLAYING...</span>
+              </button>
+              <button
+                onClick={handleStopRec}
+                className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border flex items-center gap-1.5 transition-colors bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border hover:border-led-red/50 hover:text-led-red"
+              >
+                <span>STOP</span>
+              </button>
+            </>
+          )}
 
           {/* PANIC button */}
           <button
