@@ -19,6 +19,9 @@ export interface InputState {
   selectedDeviceId: string | null;
   permissionDenied: boolean;
   noDevice: boolean;
+  eqLow: number;      // -12 to +12 dB
+  eqMid: number;
+  eqHigh: number;
 }
 
 type StateCallback = (state: InputState) => void;
