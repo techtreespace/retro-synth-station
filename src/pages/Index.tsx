@@ -30,6 +30,7 @@ const Index: React.FC = () => {
   const [initialized, setInitialized] = useState(false);
   const engineRef = useRef<SynthEngine | null>(null);
   const looperRef = useRef<LooperEngine | null>(null);
+  const inputRef = useRef<AudioInputEngine | null>(null);
 
   // Master recording state
   const [masterRecording, setMasterRecording] = useState(false);
