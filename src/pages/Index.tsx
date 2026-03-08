@@ -64,6 +64,11 @@ const Index: React.FC = () => {
         const masterGain = engineRef.current.getMasterGain();
         if (ctx) {
           looperRef.current.init(ctx, ctx.destination, masterGain);
+
+          // Init input engine with same audio context and master gain
+          if (inputRef.current && masterGain) {
+            inputRef.current.init(ctx, masterGain, looperRef.current.getMasterStreamDest());
+          }
         }
       }
     }
