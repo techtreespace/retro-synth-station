@@ -18,18 +18,15 @@ const SYNTH_TYPES: { value: SynthType; label: string }[] = [
 
 const Index: React.FC = () => {
   const [params, setParams] = useState<SynthParams>({ ...DEFAULT_PARAMS });
-  const [octave, setOctave] = useState(1); // C3 = octave 1
+  const [octave, setOctave] = useState(1);
   const [activeNotes, setActiveNotes] = useState<Set<number>>(new Set());
   const [currentPreset, setCurrentPreset] = useState<string | null>('Init Patch');
   const [initialized, setInitialized] = useState(false);
   const engineRef = useRef<SynthEngine | null>(null);
 
-  // Initialize engine
   useEffect(() => {
     engineRef.current = new SynthEngine(params);
-    return () => {
-      engineRef.current?.panic();
-    };
+    return () => { engineRef.current?.panic(); };
   }, []);
 
   const ensureInit = useCallback(async () => {
@@ -64,6 +61,16 @@ const Index: React.FC = () => {
     });
   }, []);
 
+  const handleReleaseAll = useCallback(() => {
+    engineRef.current?.releaseAll();
+    setActiveNotes(new Set());
+  }, []);
+
+  const handlePanic = useCallback(() => {
+    engineRef.current?.panic();
+    setActiveNotes(new Set());
+  }, []);
+
   const handlePreset = useCallback((preset: Preset) => {
     const newParams = { ...DEFAULT_PARAMS, ...preset.params };
     setParams(newParams);
@@ -92,13 +99,21 @@ const Index: React.FC = () => {
             RETROSYNTH
           </h1>
         </div>
-        <PresetSelector onSelect={handlePreset} currentPreset={currentPreset} />
+        <div className="flex items-center gap-2">
+          <PresetSelector onSelect={handlePreset} currentPreset={currentPreset} />
+          {/* PANIC button */}
+          <button
+            onClick={handlePanic}
+            className="min-w-[44px] min-h-[44px] px-3 py-2 rounded font-display text-[10px] tracking-wider border border-led-red bg-led-red/20 text-led-red hover:bg-led-red/40 active:bg-led-red/60 transition-colors"
+          >
+            PANIC
+          </button>
+        </div>
       </header>
 
       {/* Top controls */}
       <div className="bg-synth-panel p-3 border-b border-synth-panel-border">
         <div className="flex flex-wrap items-end gap-3">
-          {/* Synth type selector */}
           <div className="flex gap-1">
             {SYNTH_TYPES.map(t => (
               <button
@@ -115,53 +130,25 @@ const Index: React.FC = () => {
             ))}
           </div>
 
-          <Knob
-            value={params.masterVolume}
-            min={0} max={1}
-            label="Volume"
-            onChange={(v) => updateParams({ masterVolume: v })}
-            size="md"
-          />
-          <Knob
-            value={params.glide}
-            min={0} max={1}
-            label="Glide"
-            onChange={(v) => updateParams({ glide: v })}
-            size="sm"
-          />
-          <WheelControl
-            value={params.pitchBend}
-            onChange={(v) => updateParams({ pitchBend: v })}
-            label="Pitch"
-            centered
-          />
-          <WheelControl
-            value={params.modWheel}
-            onChange={(v) => updateParams({ modWheel: v })}
-            label="Mod"
-          />
+          <Knob value={params.masterVolume} min={0} max={1} label="Volume" onChange={(v) => updateParams({ masterVolume: v })} size="md" />
+          <Knob value={params.glide} min={0} max={1} label="Glide" onChange={(v) => updateParams({ glide: v })} size="sm" />
+          <WheelControl value={params.pitchBend} onChange={(v) => updateParams({ pitchBend: v })} label="Pitch" centered />
+          <WheelControl value={params.modWheel} onChange={(v) => updateParams({ modWheel: v })} label="Mod" />
         </div>
       </div>
 
       {/* Middle controls */}
       <div className="flex-1 bg-synth-panel p-3 overflow-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* Oscillator */}
           <div className="bg-synth-surface-dark/50 rounded-lg p-3 panel-shadow">
             <OscillatorSection params={params} onChange={updateParams} />
           </div>
-
-          {/* Filter */}
           <div className="bg-synth-surface-dark/50 rounded-lg p-3 panel-shadow">
             <FilterSection params={params} onChange={updateParams} />
           </div>
-
-          {/* ADSR */}
           <div className="bg-synth-surface-dark/50 rounded-lg p-3 panel-shadow">
             <EnvelopeSection adsr={params.adsr} onChange={handleAdsrChange} label="Amp Env" />
           </div>
-
-          {/* LFO or FM Mod ADSR */}
           <div className="bg-synth-surface-dark/50 rounded-lg p-3 panel-shadow">
             {params.type === 'fm' ? (
               <EnvelopeSection adsr={params.fmModAdsr} onChange={handleModAdsrChange} label="Mod Env" />
@@ -171,7 +158,6 @@ const Index: React.FC = () => {
           </div>
         </div>
 
-        {/* LFO also visible in FM mode */}
         {params.type === 'fm' && (
           <div className="mt-4 max-w-[200px]">
             <div className="bg-synth-surface-dark/50 rounded-lg p-3 panel-shadow">
@@ -188,6 +174,7 @@ const Index: React.FC = () => {
           onNoteOn={handleNoteOn}
           onNoteOff={handleNoteOff}
           onOctaveChange={setOctave}
+          onReleaseAll={handleReleaseAll}
           activeNotes={activeNotes}
         />
       </div>
@@ -202,9 +189,7 @@ const Index: React.FC = () => {
           <div className="text-center space-y-3">
             <div className="w-4 h-4 mx-auto rounded-full bg-led-amber animate-led-pulse led-glow" />
             <p className="font-display text-lg text-led-amber tracking-widest">RETROSYNTH</p>
-            <p className="font-mono-synth text-sm text-synth-panel-foreground">
-              TAP TO START
-            </p>
+            <p className="font-mono-synth text-sm text-synth-panel-foreground">TAP TO START</p>
           </div>
         </div>
       )}
