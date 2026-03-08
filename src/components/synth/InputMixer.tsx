@@ -226,6 +226,47 @@ const InputMixer: React.FC<InputMixerProps> = ({ inputEngine, initialized, ensur
             </button>
           </div>
 
+          {/* 3-Band EQ */}
+          <div className="flex items-end gap-2 flex-wrap">
+            <span className="text-[9px] font-display text-synth-panel-foreground/50 uppercase tracking-widest self-center">EQ</span>
+            <Knob
+              value={state.eqLow}
+              min={-12}
+              max={12}
+              step={0.5}
+              label="LOW"
+              onChange={(v) => inputEngine?.setEQ('low', v)}
+              size="sm"
+              formatValue={(v) => `${v > 0 ? '+' : ''}${v.toFixed(0)}dB`}
+            />
+            <Knob
+              value={state.eqMid}
+              min={-12}
+              max={12}
+              step={0.5}
+              label="MID"
+              onChange={(v) => inputEngine?.setEQ('mid', v)}
+              size="sm"
+              formatValue={(v) => `${v > 0 ? '+' : ''}${v.toFixed(0)}dB`}
+            />
+            <Knob
+              value={state.eqHigh}
+              min={-12}
+              max={12}
+              step={0.5}
+              label="HIGH"
+              onChange={(v) => inputEngine?.setEQ('high', v)}
+              size="sm"
+              formatValue={(v) => `${v > 0 ? '+' : ''}${v.toFixed(0)}dB`}
+            />
+            <button
+              onClick={() => inputEngine?.resetEQ()}
+              className="min-w-[44px] min-h-[34px] px-2 py-1 rounded font-display text-[9px] tracking-wider border border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground hover:border-synth-panel-foreground/30 transition-colors"
+            >
+              FLAT
+            </button>
+          </div>
+
           {/* Level meter */}
           {state.connected && (
             <div className="flex items-center gap-2">
