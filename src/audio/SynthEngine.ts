@@ -48,9 +48,10 @@ interface VoiceNodes {
   allNodes: AudioNode[];          // everything to disconnect
 }
 
-function createDistortionCurve(amount: number): Float32Array {
+function createDistortionCurve(amount: number): Float32Array<ArrayBuffer> {
   const samples = 256;
-  const curve = new Float32Array(samples);
+  const buffer = new ArrayBuffer(samples * 4);
+  const curve = new Float32Array(buffer);
   const deg = Math.PI / 180;
   for (let i = 0; i < samples; i++) {
     const x = (i * 2) / samples - 1;
