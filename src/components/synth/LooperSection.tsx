@@ -33,7 +33,8 @@ const WaveformDisplay: React.FC<{ data: number[]; mobile?: boolean }> = ({ data,
   );
 };
 
-const stateLabel = (state: SlotState, isOverdub: boolean): string => {
+const stateLabel = (state: SlotState, isOverdub: boolean, isPending: boolean): string => {
+  if (isPending) return 'WAIT...';
   switch (state) {
     case 'empty': return 'EMPTY';
     case 'recording': return isOverdub ? 'ODUB' : 'REC';
