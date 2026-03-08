@@ -17,7 +17,7 @@ interface SequencerSectionProps {
 
 const PATTERN_LENGTHS: (8 | 16 | 32)[] = [8, 16, 32];
 
-const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initialized, ensureInit }) => {
+const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initialized, ensureInit, onPlayingChange, onBpmChange }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [paused, setPaused] = useState(false);
