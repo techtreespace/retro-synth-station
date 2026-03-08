@@ -34,7 +34,7 @@ const Index: React.FC = () => {
   const sequencerRef = useRef<SequencerSectionHandle | null>(null);
 
   // Master recording state machine: 'idle' | 'recording' | 'paused' | 'previewing'
-  type RecState = 'idle' | 'recording' | 'paused' | 'previewing';
+  type RecState = 'idle' | 'recording' | 'paused' | 'stopped' | 'previewing';
   const [recState, setRecState] = useState<RecState>('idle');
   const [masterRecordElapsed, setMasterRecordElapsed] = useState(0);
   const recTimerRef = useRef<number | null>(null);
