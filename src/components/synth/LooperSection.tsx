@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Circle, Square, Play, Pause, X, Volume2 } from 'lucide-react';
-import { LooperEngine, LoopSlot, LoopSlotStatus } from '@/audio/LooperEngine';
+import React, { useState, useCallback, useEffect } from 'react';
+import { ChevronDown, ChevronRight, Circle, Play, Pause, X } from 'lucide-react';
+import { LooperEngine, LoopSlot, SlotState } from '@/audio/LooperEngine';
 import Knob from './Knob';
 
 interface LooperSectionProps {
@@ -33,25 +33,20 @@ const WaveformDisplay: React.FC<{ data: number[]; mobile?: boolean }> = ({ data,
   );
 };
 
-const statusLabel = (status: LoopSlotStatus): string => {
-  switch (status) {
+const stateLabel = (state: SlotState, isOverdub: boolean): string => {
+  switch (state) {
     case 'empty': return 'EMPTY';
-    case 'recording': return 'REC';
-    case 'overdubbing': return 'ODUB';
+    case 'recording': return isOverdub ? 'ODUB' : 'REC';
+    case 'recorded': return 'READY';
     case 'playing': return 'PLAY';
-    case 'stopped': return 'STOP';
   }
 };
 
-const statusColor = (status: LoopSlotStatus): string => {
-  switch (status) {
-    case 'recording':
-    case 'overdubbing':
-      return 'text-led-red';
-    case 'playing':
-      return 'text-led-green';
-    default:
-      return 'text-synth-panel-foreground/50';
+const stateColor = (state: SlotState): string => {
+  switch (state) {
+    case 'recording': return 'text-led-red';
+    case 'playing': return 'text-led-green';
+    default: return 'text-synth-panel-foreground/50';
   }
 };
 
@@ -59,7 +54,8 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
   const [collapsed, setCollapsed] = useState(true);
   const [slots, setSlots] = useState<LoopSlot[]>(() =>
     Array.from({ length: 4 }, () => ({
-      status: 'empty' as LoopSlotStatus,
+      state: 'empty' as SlotState,
+      isOverdub: false,
       buffer: null,
       bars: 2 as 1 | 2 | 4 | 8,
       volume: 0.8,
@@ -70,14 +66,15 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
   const [metronome, setMetronome] = useState(false);
   const [countIn, setCountIn] = useState(0);
 
-  // Sync BPM to engine
+  // Sync settings to engine
   useEffect(() => {
     if (looperEngine) {
       looperEngine.setBpm(bpm);
       looperEngine.setSyncToBpm(syncToBpm);
       looperEngine.setMetronomeEnabled(metronome);
+      looperEngine.setSequencerPlaying(sequencerPlaying);
     }
-  }, [looperEngine, bpm, syncToBpm, metronome]);
+  }, [looperEngine, bpm, syncToBpm, metronome, sequencerPlaying]);
 
   // Set callbacks
   useEffect(() => {
@@ -95,7 +92,7 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
     });
   }, [looperEngine]);
 
-  // Stop/resume loops with sequencer
+  // Stop loops when sequencer stops
   useEffect(() => {
     if (!looperEngine) return;
     if (!sequencerPlaying) {
@@ -103,15 +100,10 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
     }
   }, [looperEngine, sequencerPlaying]);
 
-  const handleSlotRecord = useCallback(async (index: number) => {
+  const handleSlotRecord = useCallback((index: number) => {
     if (!looperEngine) return;
-    const slot = slots[index];
-    if (slot.status === 'recording' || slot.status === 'overdubbing') {
-      looperEngine.stopSlotRecording(index);
-    } else {
-      await looperEngine.startSlotRecording(index);
-    }
-  }, [looperEngine, slots]);
+    looperEngine.handleRecButton(index);
+  }, [looperEngine]);
 
   const handleSlotPlayToggle = useCallback((index: number) => {
     looperEngine?.toggleSlotPlayback(index);
@@ -153,8 +145,8 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
         <div className="flex items-center gap-2">
           {collapsed ? <ChevronRight className="w-4 h-4 text-synth-panel-foreground" /> : <ChevronDown className="w-4 h-4 text-synth-panel-foreground" />}
           <span className="font-display text-[11px] text-led-amber tracking-widest">LOOPER</span>
-          {slots.some(s => s.status === 'playing') && <div className="w-2 h-2 rounded-full bg-led-green animate-led-pulse" />}
-          {slots.some(s => s.status === 'recording' || s.status === 'overdubbing') && <div className="w-2 h-2 rounded-full bg-led-red animate-led-pulse" />}
+          {slots.some(s => s.state === 'playing') && <div className="w-2 h-2 rounded-full bg-led-green animate-led-pulse" />}
+          {slots.some(s => s.state === 'recording') && <div className="w-2 h-2 rounded-full bg-led-red animate-led-pulse" />}
         </div>
       </button>
 
@@ -162,7 +154,6 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
         <div className="px-3 pb-3 space-y-3">
           {/* Looper Controls */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Sync toggle */}
             <div className="flex gap-1">
               {(['FREE', 'SYNC'] as const).map(mode => (
                 <button
@@ -179,7 +170,6 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
               ))}
             </div>
 
-            {/* Metronome */}
             <button
               onClick={() => setMetronome(!metronome)}
               className={`min-w-[44px] min-h-[36px] px-3 py-1 rounded font-display text-[8px] tracking-wider border transition-colors
@@ -191,7 +181,6 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
               METRO
             </button>
 
-            {/* Stop all */}
             <button
               onClick={handleStopAll}
               className="min-w-[44px] min-h-[36px] px-3 py-1 rounded font-display text-[8px] tracking-wider border border-led-red bg-led-red/10 text-led-red hover:bg-led-red/30 transition-colors"
@@ -199,7 +188,6 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
               STOP ALL
             </button>
 
-            {/* Count-in indicator */}
             {countIn > 0 && (
               <span className="font-display text-lg text-led-amber animate-led-pulse">{countIn}</span>
             )}
@@ -208,8 +196,8 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
           {/* 4 Loop Slots */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {slots.map((slot, i) => {
-              const isRecording = slot.status === 'recording' || slot.status === 'overdubbing';
-              const isPlaying = slot.status === 'playing';
+              const isRecording = slot.state === 'recording';
+              const isPlaying = slot.state === 'playing';
               
               return (
                 <div
@@ -225,8 +213,8 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                   {/* Slot header */}
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-display text-xs text-led-amber">{i + 1}</span>
-                    <span className={`font-mono-synth text-[8px] tracking-wider ${statusColor(slot.status)}`}>
-                      {statusLabel(slot.status)}
+                    <span className={`font-mono-synth text-[8px] tracking-wider ${stateColor(slot.state)}`}>
+                      {stateLabel(slot.state, slot.isOverdub)}
                     </span>
                   </div>
 
@@ -241,7 +229,7 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                       <button
                         key={b}
                         onClick={() => handleSlotBars(i, b)}
-                        disabled={slot.status !== 'empty' && slot.status !== 'stopped'}
+                        disabled={slot.state !== 'empty' && slot.state !== 'recorded'}
                         className={`flex-1 min-h-[28px] px-1 py-0.5 rounded font-display text-[7px] tracking-wider border transition-colors
                           ${slot.bars === b
                             ? 'bg-led-amber/20 text-led-amber border-led-amber'
@@ -260,8 +248,10 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                       onClick={() => handleSlotRecord(i)}
                       className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded border transition-colors
                         ${isRecording
-                          ? 'bg-led-red/30 text-led-red border-led-red'
-                          : 'bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border hover:border-led-red/50 hover:text-led-red'
+                          ? 'bg-led-red/30 text-led-red border-led-red animate-pulse'
+                          : slot.state === 'empty'
+                            ? 'bg-synth-surface-dark text-synth-panel-foreground/40 border-synth-panel-border hover:border-led-red/50 hover:text-led-red'
+                            : 'bg-synth-surface-dark text-synth-panel-foreground border-synth-panel-border hover:border-led-red/50 hover:text-led-red'
                         }`}
                     >
                       <Circle className="w-3.5 h-3.5" fill={isRecording ? 'currentColor' : 'none'} />
@@ -270,7 +260,7 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                     {/* Play/Stop */}
                     <button
                       onClick={() => handleSlotPlayToggle(i)}
-                      disabled={!slot.buffer}
+                      disabled={!slot.buffer && slot.state !== 'playing'}
                       className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded border transition-colors
                         ${isPlaying
                           ? 'bg-led-green/20 text-led-green border-led-green'
@@ -283,7 +273,7 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                     {/* Clear */}
                     <button
                       onClick={() => handleSlotClear(i)}
-                      disabled={slot.status === 'empty'}
+                      disabled={slot.state === 'empty'}
                       className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded border border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground hover:border-led-red/50 hover:text-led-red transition-colors disabled:opacity-30"
                     >
                       <X className="w-3.5 h-3.5" />
