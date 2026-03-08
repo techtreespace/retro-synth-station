@@ -8,6 +8,7 @@ interface LooperSectionProps {
   looperEngine: LooperEngine | null;
   bpm: number;
   sequencerPlaying: boolean;
+  defaultExpanded?: boolean;
 }
 
 const BAR_OPTIONS: (1 | 2 | 4 | 8)[] = [1, 2, 4, 8];
