@@ -157,7 +157,7 @@ const Index: React.FC = () => {
     const pos = sequencerRef.current?.pauseSequencer() ?? null;
     seqPausePositionRef.current = pos;
     // Disable input monitoring
-    inputRef.current?.setMonitor(false);
+    inputRef.current?.setMonitoring(false);
     setRecState('paused');
   }, [stopElapsedTimer]);
 
