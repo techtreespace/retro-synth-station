@@ -149,11 +149,22 @@ export class SynthEngine {
     const { attack, decay, sustain } = this.params.adsr;
     const velGain = Math.max(0, Math.min(1, velocity / 127));
 
+    // Per-waveform loudness compensation (analog only)
+    const WAVEFORM_COMPENSATION: Record<string, number> = {
+      'sine': 1.45,
+      'triangle': 1.25,
+      'sawtooth': 0.72,
+      'square': 0.60,
+    };
+    const waveComp = this.params.type === 'analog'
+      ? (WAVEFORM_COMPENSATION[this.params.waveform] ?? 1.0)
+      : 1.0;
+
     // Create voice gain
     const gainNode = this.ctx.createGain();
     gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.7 * velGain, now + Math.max(attack, 0.003));
-    gainNode.gain.linearRampToValueAtTime(Math.max(sustain, 0.001) * 0.7 * velGain, now + Math.max(attack, 0.003) + Math.max(decay, 0.003));
+    gainNode.gain.linearRampToValueAtTime(0.7 * velGain * waveComp, now + Math.max(attack, 0.003));
+    gainNode.gain.linearRampToValueAtTime(Math.max(sustain, 0.001) * 0.7 * velGain * waveComp, now + Math.max(attack, 0.003) + Math.max(decay, 0.003));
 
     // Create filter
     const filter = this.ctx.createBiquadFilter();
