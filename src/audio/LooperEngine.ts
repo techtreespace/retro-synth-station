@@ -17,9 +17,9 @@ export class LooperEngine {
   private slots: LoopSlot[] = [];
   private slotSources: (AudioBufferSourceNode | null)[] = [null, null, null, null];
   private slotGains: (GainNode | null)[] = [null, null, null, null];
-  private slotRecorders: (MediaRecorder | null)[] = [null, null, null, null];
-  private slotRecordChunks: Blob[][] = [[], [], [], []];
-  private slotRecordStreamDests: (MediaStreamAudioDestinationNode | null)[] = [null, null, null, null];
+  private slotRecordProcessors: (ScriptProcessorNode | null)[] = [null, null, null, null];
+  private slotRecordBuffers: Float32Array[][] = [[], [], [], []];
+  private slotLoopTimers: (number | null)[] = [null, null, null, null];
   private slotLoopTimers: (number | null)[] = [null, null, null, null];
 
   // Master recording
