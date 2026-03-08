@@ -54,7 +54,7 @@ export class AudioInputEngine {
 
   private onStateChange: StateCallback | null = null;
   private levelAnimFrame: number | null = null;
-  private analyserData: Float32Array | null = null;
+  private analyserData: Float32Array<ArrayBuffer> | null = null;
 
   init(ctx: AudioContext, masterGain: GainNode, masterStreamDest?: MediaStreamAudioDestinationNode | null): void {
     this.ctx = ctx;
