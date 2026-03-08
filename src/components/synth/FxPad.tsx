@@ -10,10 +10,12 @@ interface FxPadProps {
   ensureInit: () => Promise<void>;
   recordingDest?: AudioNode | null;
   masterGain?: GainNode | null;
+  defaultExpanded?: boolean;
+  mobileGrid?: boolean;
 }
 
-const FxPad: React.FC<FxPadProps> = ({ synthEngine, initialized, ensureInit, recordingDest, masterGain }) => {
-  const [collapsed, setCollapsed] = useState(true);
+const FxPad: React.FC<FxPadProps> = ({ synthEngine, initialized, ensureInit, recordingDest, masterGain, defaultExpanded, mobileGrid }) => {
+  const [collapsed, setCollapsed] = useState(!defaultExpanded);
   const [volume, setVolume] = useState(0.7);
   const [activeIds, setActiveIds] = useState<Set<string>>(new Set());
   const fxRef = useRef<FxEngine | null>(null);

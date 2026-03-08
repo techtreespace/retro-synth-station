@@ -31,8 +31,8 @@ const stateColor = (state: SlotState): string => {
   }
 };
 
-const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequencerPlaying }) => {
-  const [collapsed, setCollapsed] = useState(true);
+const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequencerPlaying, defaultExpanded }) => {
+  const [collapsed, setCollapsed] = useState(!defaultExpanded);
   const [slots, setSlots] = useState<LoopSlot[]>(() =>
     Array.from({ length: 4 }, () => ({
       state: 'empty' as SlotState,
