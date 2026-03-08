@@ -254,6 +254,7 @@ const Index: React.FC = () => {
         ensureInit={ensureInit}
         onPlayingChange={setSequencerPlaying}
         onBpmChange={setSequencerBpm}
+        onStartTimeChange={(time) => looperRef.current?.setSequencerStartTime(time)}
         recordingDest={looperRef.current?.getMasterStreamDest() || null}
       />
 
