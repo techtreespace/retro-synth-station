@@ -48,12 +48,12 @@ const OscillatorSection: React.FC<OscillatorSectionProps> = ({ params, onChange 
           ))}
         </div>
         <Knob
-          value={params.distortion}
+          value={params.distortion ?? 0}
           min={0} max={100} step={1}
           label="Dist"
           onChange={(v) => onChange({ distortion: v })}
           size="sm"
-          formatValue={(v) => v.toFixed(0)}
+          formatValue={(v) => String(Math.round(v ?? 0))}
         />
       </div>
     );
