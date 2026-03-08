@@ -198,7 +198,11 @@ const Index: React.FC = () => {
     seqPausePositionRef.current = null;
   }, [stopElapsedTimer]);
 
-  const formatTime = (secs: number): string => {
+  // Cleanup rec timer
+  useEffect(() => {
+    return () => { if (recTimerRef.current) clearInterval(recTimerRef.current); };
+  }, []);
+
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
