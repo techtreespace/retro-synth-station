@@ -27,92 +27,85 @@ const Keyboard: React.FC<KeyboardProps> = ({
   const touchNotes = useRef<Map<number, number>>(new Map());
   const mouseNote = useRef<number | null>(null);
   const mouseDown = useRef(false);
-  const keyboardNotes = useRef<Map<string, number>>(new Map());
+  const heldKeys = useRef<Set<string>>(new Set());
+  // Use refs for callbacks to avoid stale closures in global listeners
+  const onNoteOnRef = useRef(onNoteOn);
+  const onNoteOffRef = useRef(onNoteOff);
+  const onReleaseAllRef = useRef(onReleaseAll);
+  const baseNoteRef = useRef((octave + 2) * 12);
+  const octaveRef = useRef(octave);
+  const onOctaveChangeRef = useRef(onOctaveChange);
+
+  onNoteOnRef.current = onNoteOn;
+  onNoteOffRef.current = onNoteOff;
+  onReleaseAllRef.current = onReleaseAll;
+  baseNoteRef.current = (octave + 2) * 12;
+  octaveRef.current = octave;
+  onOctaveChangeRef.current = onOctaveChange;
 
   const baseNote = (octave + 2) * 12;
 
-  // Computer keyboard handling with proper keyup
+  // Keyboard + global release handlers — added ONCE
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
       const key = e.key.toLowerCase();
+      if (heldKeys.current.has(key)) return;
 
-      if (key === 'z') { onOctaveChange(Math.max(-2, octave - 1)); return; }
-      if (key === 'x') { onOctaveChange(Math.min(4, octave + 1)); return; }
+      if (key === 'z') { onOctaveChangeRef.current(Math.max(-2, octaveRef.current - 1)); return; }
+      if (key === 'x') { onOctaveChangeRef.current(Math.min(4, octaveRef.current + 1)); return; }
 
-      if (KEY_MAP[key] !== undefined && !keyboardNotes.current.has(key)) {
-        const note = baseNote + KEY_MAP[key];
-        keyboardNotes.current.set(key, note);
-        onNoteOn(note);
+      if (KEY_MAP[key] !== undefined) {
+        heldKeys.current.add(key);
+        const note = baseNoteRef.current + KEY_MAP[key];
+        onNoteOnRef.current(note);
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      const note = keyboardNotes.current.get(key);
-      if (note !== undefined) {
-        keyboardNotes.current.delete(key);
-        onNoteOff(note);
+      if (KEY_MAP[key] !== undefined && heldKeys.current.has(key)) {
+        heldKeys.current.delete(key);
+        const note = baseNoteRef.current + KEY_MAP[key];
+        onNoteOffRef.current(note);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [baseNote, octave, onNoteOn, onNoteOff, onOctaveChange]);
-
-  // Bug 1 fix: Global mouseup/touchend to release all mouse-triggered notes
-  useEffect(() => {
     const handleGlobalMouseUp = () => {
       if (mouseNote.current !== null) {
-        onNoteOff(mouseNote.current);
+        onNoteOffRef.current(mouseNote.current);
         mouseNote.current = null;
       }
       mouseDown.current = false;
     };
 
-    const handleGlobalTouchEnd = (e: TouchEvent) => {
-      // Only handle touches that originated outside the keyboard container
-      // Keyboard container handles its own touch events
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        const touch = e.changedTouches[i];
-        const note = touchNotes.current.get(touch.identifier);
-        if (note !== undefined) {
-          onNoteOff(note);
-          touchNotes.current.delete(touch.identifier);
-        }
-      }
-    };
-
-    // Also handle visibility change / blur to release all
     const handleBlur = () => {
-      onReleaseAll();
+      // Release everything on blur/tab switch
+      onReleaseAllRef.current();
       mouseNote.current = null;
       mouseDown.current = false;
       touchNotes.current.clear();
-      keyboardNotes.current.clear();
+      heldKeys.current.clear();
     };
 
+    const handleVisibility = () => { if (document.hidden) handleBlur(); };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('mouseup', handleGlobalMouseUp);
-    window.addEventListener('touchend', handleGlobalTouchEnd);
-    window.addEventListener('touchcancel', handleGlobalTouchEnd);
     window.addEventListener('blur', handleBlur);
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) handleBlur();
-    });
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
-      window.removeEventListener('touchend', handleGlobalTouchEnd);
-      window.removeEventListener('touchcancel', handleGlobalTouchEnd);
       window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [onNoteOff, onReleaseAll]);
+  }, []); // ONCE only
 
-  // Touch handling - Bug 4: multi-touch support
+  // Touch handlers
   const getNoteFromTouch = useCallback((x: number, y: number): number | null => {
     const elements = document.elementsFromPoint(x, y);
     for (const el of elements) {
@@ -160,7 +153,6 @@ const Keyboard: React.FC<KeyboardProps> = ({
     }
   }, [onNoteOff]);
 
-  // Mouse handling with global release
   const handleMouseDown = useCallback((note: number) => {
     mouseDown.current = true;
     mouseNote.current = note;
@@ -177,17 +169,13 @@ const Keyboard: React.FC<KeyboardProps> = ({
     }
   }, [onNoteOn, onNoteOff]);
 
-  // Generate 2 octaves of keys
+  // Generate 2 octaves
   const whiteKeys: { note: number; name: string }[] = [];
   const blackKeys: { note: number; name: string; position: number }[] = [];
 
   for (let oct = 0; oct < 2; oct++) {
-    for (const idx of WHITE_INDICES) {
-      whiteKeys.push({ note: baseNote + oct * 12 + idx, name: NOTE_NAMES[idx] });
-    }
-    for (const idx of BLACK_INDICES) {
-      blackKeys.push({ note: baseNote + oct * 12 + idx, name: NOTE_NAMES[idx], position: BLACK_POSITIONS[idx] + oct * 7 });
-    }
+    for (const idx of WHITE_INDICES) whiteKeys.push({ note: baseNote + oct * 12 + idx, name: NOTE_NAMES[idx] });
+    for (const idx of BLACK_INDICES) blackKeys.push({ note: baseNote + oct * 12 + idx, name: NOTE_NAMES[idx], position: BLACK_POSITIONS[idx] + oct * 7 });
   }
 
   const whiteKeyWidth = 100 / whiteKeys.length;
@@ -201,9 +189,7 @@ const Keyboard: React.FC<KeyboardProps> = ({
         >
           OCT −
         </button>
-        <span className="font-mono-synth text-xs text-foreground">
-          C{octave + 3} – B{octave + 4}
-        </span>
+        <span className="font-mono-synth text-xs text-foreground">C{octave + 3} – B{octave + 4}</span>
         <button
           onClick={() => onOctaveChange(Math.min(4, octave + 1))}
           className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded bg-synth-panel text-synth-panel-foreground font-mono-synth text-sm border border-synth-panel-border active:bg-synth-panel-border"
@@ -234,23 +220,19 @@ const Keyboard: React.FC<KeyboardProps> = ({
                 onMouseDown={(e) => { e.preventDefault(); handleMouseDown(key.note); }}
                 onMouseEnter={() => handleMouseEnter(key.note)}
               >
-                <span className="text-[10px] font-mono-synth text-foreground/50 pointer-events-none">
-                  {key.name}
-                </span>
+                <span className="text-[10px] font-mono-synth text-foreground/50 pointer-events-none">{key.name}</span>
               </div>
             );
           })}
-
           {blackKeys.map((key) => {
             const isActive = activeNotes.has(key.note);
-            const leftPos = (key.position + 0.65) * whiteKeyWidth;
             return (
               <div
                 key={key.note}
                 data-note={key.note}
                 className={`absolute top-0 rounded-b-md cursor-pointer z-10 transition-colors duration-75
                   ${isActive ? 'bg-key-black-active led-glow-sm' : 'bg-key-black hover:brightness-125'}`}
-                style={{ left: `${leftPos}%`, width: `${whiteKeyWidth * 0.65}%`, height: '60%' }}
+                style={{ left: `${(key.position + 0.65) * whiteKeyWidth}%`, width: `${whiteKeyWidth * 0.65}%`, height: '60%' }}
                 onMouseDown={(e) => { e.preventDefault(); handleMouseDown(key.note); }}
                 onMouseEnter={() => handleMouseEnter(key.note)}
               />
