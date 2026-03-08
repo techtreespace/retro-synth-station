@@ -526,6 +526,12 @@ export class LooperEngine {
 
   // ─── MASTER RECORDING ────────────────────────────────────────────
 
+  private masterPaused = false;
+  private masterPauseElapsed = 0; // elapsed seconds at pause moment
+  private masterPreviewSource: AudioBufferSourceNode | null = null;
+  private masterPreviewPlaying = false;
+  private onMasterPreviewEnd: (() => void) | null = null;
+
   startMasterRecording(): void {
     if (!this.ctx || !this.masterStreamDest || this.masterRecording) return;
 
@@ -543,22 +549,85 @@ export class LooperEngine {
       const ext = recorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
       this.downloadBlob(blob, `retrosynth_${Date.now()}.${ext}`);
       this.masterRecording = false;
+      this.masterPaused = false;
+      this.masterPauseElapsed = 0;
       this.onMasterRecordingChange?.(false, 0);
     };
 
     this.masterRecorder = recorder;
     this.masterRecording = true;
+    this.masterPaused = false;
+    this.masterPauseElapsed = 0;
     this.masterRecordStart = Date.now();
     recorder.start(250);
     this.onMasterRecordingChange?.(true, 0);
   }
 
+  pauseMasterRecording(): void {
+    if (!this.masterRecorder || this.masterRecorder.state !== 'recording') return;
+    this.masterPauseElapsed = (Date.now() - this.masterRecordStart) / 1000;
+    this.masterRecorder.pause();
+    this.masterPaused = true;
+  }
+
+  resumeMasterRecording(): void {
+    if (!this.masterRecorder || this.masterRecorder.state !== 'paused') return;
+    this.masterRecorder.resume();
+    this.masterPaused = false;
+    // Adjust masterRecordStart so elapsed calculation stays correct
+    this.masterRecordStart = Date.now() - this.masterPauseElapsed * 1000;
+  }
+
   stopMasterRecording(): void {
-    if (this.masterRecorder && this.masterRecorder.state === 'recording') {
+    this.stopMasterPreview();
+    if (this.masterRecorder && (this.masterRecorder.state === 'recording' || this.masterRecorder.state === 'paused')) {
       this.masterRecorder.stop();
     }
     this.masterRecorder = null;
+    this.masterPaused = false;
+    this.masterPauseElapsed = 0;
   }
+
+  isMasterPaused(): boolean { return this.masterPaused; }
+
+  /** Preview recorded audio — plays directly to destination, bypassing masterGainNode */
+  async previewMasterRecording(onEnd?: () => void): Promise<void> {
+    if (!this.ctx || this.masterRecordChunks.length === 0) return;
+    this.stopMasterPreview();
+
+    this.onMasterPreviewEnd = onEnd || null;
+
+    // Request all data from paused recorder
+    const blob = new Blob(this.masterRecordChunks, {
+      type: this.masterRecorder?.mimeType || this.getSupportedMimeType()
+    });
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+
+    const source = this.ctx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(this.ctx.destination); // bypass masterGainNode
+    source.onended = () => {
+      this.masterPreviewPlaying = false;
+      this.masterPreviewSource = null;
+      this.onMasterPreviewEnd?.();
+      this.onMasterPreviewEnd = null;
+    };
+    source.start();
+    this.masterPreviewSource = source;
+    this.masterPreviewPlaying = true;
+  }
+
+  stopMasterPreview(): void {
+    if (this.masterPreviewSource) {
+      try { this.masterPreviewSource.stop(); } catch {}
+      this.masterPreviewSource = null;
+    }
+    this.masterPreviewPlaying = false;
+    this.onMasterPreviewEnd = null;
+  }
+
+  isMasterPreviewPlaying(): boolean { return this.masterPreviewPlaying; }
 
   toggleMasterRecording(): void {
     if (this.masterRecording) {
@@ -570,6 +639,7 @@ export class LooperEngine {
 
   isMasterRecording(): boolean { return this.masterRecording; }
   getMasterRecordElapsed(): number {
+    if (this.masterPaused) return this.masterPauseElapsed;
     if (!this.masterRecording) return 0;
     return (Date.now() - this.masterRecordStart) / 1000;
   }

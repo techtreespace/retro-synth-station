@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { ChevronDown, ChevronRight, Play, Square, Pause } from 'lucide-react';
 import { SequencerEngine, createInitialDrumPattern, createInitialMelodyPattern, DrumPattern, MelodyPattern } from '@/audio/SequencerEngine';
 import { DrumSound, DRUM_SOUNDS } from '@/audio/DrumEngine';
@@ -6,6 +6,12 @@ import { SynthEngine } from '@/audio/SynthEngine';
 import DrumGrid from './DrumGrid';
 import MelodySequencer from './MelodySequencer';
 import Knob from './Knob';
+
+export interface SequencerSectionHandle {
+  pauseSequencer: () => { step: number; contextTime: number; bpm: number } | null;
+  resumeFromPosition: (position: { step: number }) => void;
+  isPlaying: () => boolean;
+}
 
 interface SequencerSectionProps {
   synthEngine: SynthEngine | null;
