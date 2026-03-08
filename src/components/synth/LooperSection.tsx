@@ -61,7 +61,6 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
       volume: 0.8,
       waveformData: [],
       startOffset: 0,
-      autoTrimOffset: 0,
     }))
   );
   const [syncToBpm, setSyncToBpm] = useState(true);
