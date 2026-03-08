@@ -201,6 +201,9 @@ const Index: React.FC = () => {
         </div>
       </header>
 
+      {/* Input Mixer */}
+      <InputMixer inputEngine={inputRef.current} initialized={initialized} ensureInit={ensureInit} />
+
       {/* Top controls */}
       <div className="bg-synth-panel p-3 border-b border-synth-panel-border">
         <div className="flex flex-wrap items-end gap-3">
