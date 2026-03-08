@@ -11,11 +11,13 @@ interface SequencerSectionProps {
   synthEngine: SynthEngine | null;
   initialized: boolean;
   ensureInit: () => Promise<void>;
+  onPlayingChange?: (playing: boolean) => void;
+  onBpmChange?: (bpm: number) => void;
 }
 
 const PATTERN_LENGTHS: (8 | 16 | 32)[] = [8, 16, 32];
 
-const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initialized, ensureInit }) => {
+const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initialized, ensureInit, onPlayingChange, onBpmChange }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -81,6 +83,10 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
       synthEngine?.noteOff(note);
     });
   }, [synthEngine]);
+
+  // Notify parent of playing/bpm changes
+  useEffect(() => { onPlayingChange?.(playing); }, [playing, onPlayingChange]);
+  useEffect(() => { onBpmChange?.(bpm); }, [bpm, onBpmChange]);
 
   const handlePlay = useCallback(async () => {
     const seq = seqRef.current;
