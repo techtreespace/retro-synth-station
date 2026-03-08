@@ -168,6 +168,13 @@ const Index: React.FC = () => {
         )}
       </div>
 
+      {/* Sequencer */}
+      <SequencerSection
+        synthEngine={engineRef.current}
+        initialized={initialized}
+        ensureInit={ensureInit}
+      />
+
       {/* Keyboard - sticky bottom */}
       <div className="sticky bottom-0 bg-card border-t-2 border-border shadow-lg">
         <Keyboard
