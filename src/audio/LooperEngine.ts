@@ -20,7 +20,7 @@ export class LooperEngine {
   private slotRecordProcessors: (ScriptProcessorNode | null)[] = [null, null, null, null];
   private slotRecordBuffers: Float32Array[][] = [[], [], [], []];
   private slotLoopTimers: (number | null)[] = [null, null, null, null];
-  private slotLoopTimers: (number | null)[] = [null, null, null, null];
+  private slotRecordTimers: (number | null)[] = [null, null, null, null];
 
   // Master recording
   private masterRecorder: MediaRecorder | null = null;
