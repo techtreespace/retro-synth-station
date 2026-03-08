@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { ChevronDown, ChevronRight, Play, Square, Pause } from 'lucide-react';
 import { SequencerEngine, createInitialDrumPattern, createInitialMelodyPattern, DrumPattern, MelodyPattern } from '@/audio/SequencerEngine';
-import { DrumSound, DRUM_SOUNDS } from '@/audio/DrumEngine';
+import { DrumSound, DRUM_SOUNDS, DrumSoundParams, getDefaultDrumParams } from '@/audio/DrumEngine';
 import { SynthEngine } from '@/audio/SynthEngine';
 import DrumGrid from './DrumGrid';
 import MelodySequencer from './MelodySequencer';
