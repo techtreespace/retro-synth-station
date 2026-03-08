@@ -229,16 +229,16 @@ export class LooperEngine {
   private doCountIn(index: number, onComplete: () => void): void {
     if (!this.ctx) return;
     const beatDuration = 60 / this.bpm;
-    const now = this.ctx.currentTime;
+    const startTime = this.ctx.currentTime + 0.1;
     this.slotPendingRecord[index] = true;
 
     for (let i = 0; i < 4; i++) {
-      const clickTime = now + i * beatDuration;
-      this.playMetronomeClick(clickTime, i === 0);
+      const clickTime = startTime + i * beatDuration;
+      this.playCountInClick(clickTime, i === 0);
       const beatNum = i + 1;
       setTimeout(() => {
         this.onCountIn?.(beatNum);
-      }, i * beatDuration * 1000);
+      }, (clickTime - this.ctx!.currentTime) * 1000);
     }
 
     // After 4 beats, start recording
