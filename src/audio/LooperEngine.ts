@@ -38,6 +38,7 @@ export class LooperEngine {
   // BPM
   private bpm = 120;
   private syncToBpm = true;
+  private sequencerStartTime = 0; // AudioContext time when sequencer started
 
   // Callbacks
   private onSlotChange: ((slotIndex: number, slot: LoopSlot) => void) | null = null;
