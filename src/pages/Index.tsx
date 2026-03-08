@@ -126,35 +126,77 @@ const Index: React.FC = () => {
     updateParams({ fmModAdsr });
   }, [updateParams]);
 
-  // Master REC button handler
-  const handleMasterRec = useCallback(async () => {
+  // Elapsed timer helper
+  const startElapsedTimer = useCallback(() => {
+    if (recTimerRef.current) clearInterval(recTimerRef.current);
+    recTimerRef.current = window.setInterval(() => {
+      setMasterRecordElapsed(looperRef.current?.getMasterRecordElapsed() ?? 0);
+    }, 200);
+  }, []);
+
+  const stopElapsedTimer = useCallback(() => {
+    if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null; }
+  }, []);
+
+  // REC button: idle → recording
+  const handleStartRec = useCallback(async () => {
     await ensureInit();
     if (!looperRef.current) return;
+    looperRef.current.startMasterRecording();
+    setRecState('recording');
+    setMasterRecordElapsed(0);
+    startElapsedTimer();
+  }, [ensureInit, startElapsedTimer]);
 
-    if (masterRecording) {
-      looperRef.current.stopMasterRecording();
-      setMasterRecording(false);
-      setMasterRecordElapsed(0);
-      if (recTimerRef.current) {
-        clearInterval(recTimerRef.current);
-        recTimerRef.current = null;
-      }
-    } else {
-      looperRef.current.startMasterRecording();
-      setMasterRecording(true);
-      setMasterRecordElapsed(0);
-      recTimerRef.current = window.setInterval(() => {
-        setMasterRecordElapsed(looperRef.current?.getMasterRecordElapsed() ?? 0);
-      }, 200);
+  // PAUSE button: recording → paused
+  const handlePauseRec = useCallback(() => {
+    if (!looperRef.current) return;
+    looperRef.current.pauseMasterRecording();
+    stopElapsedTimer();
+    // Pause sequencer and store position
+    const pos = sequencerRef.current?.pauseSequencer() ?? null;
+    seqPausePositionRef.current = pos;
+    // Disable input monitoring
+    inputRef.current?.setMonitor(false);
+    setRecState('paused');
+  }, [stopElapsedTimer]);
+
+  // REC button from paused → resume recording
+  const handleResumeRec = useCallback(() => {
+    if (!looperRef.current) return;
+    looperRef.current.resumeMasterRecording();
+    startElapsedTimer();
+    // Resume sequencer from exact pause position
+    if (seqPausePositionRef.current) {
+      sequencerRef.current?.resumeFromPosition(seqPausePositionRef.current);
     }
-  }, [masterRecording, ensureInit]);
+    setRecState('recording');
+  }, [startElapsedTimer]);
 
-  // Cleanup rec timer
-  useEffect(() => {
-    return () => {
-      if (recTimerRef.current) clearInterval(recTimerRef.current);
-    };
+  // PREVIEW button from paused → previewing
+  const handlePreview = useCallback(async () => {
+    if (!looperRef.current) return;
+    setRecState('previewing');
+    await looperRef.current.previewMasterRecording(() => {
+      // On preview end → back to PAUSED, NOT resume sequencer
+      setRecState('paused');
+    });
   }, []);
+
+  // STOP preview → back to paused
+  const handleStopPreview = useCallback(() => {
+    looperRef.current?.stopMasterPreview();
+    setRecState('paused');
+  }, []);
+
+  // STOP recording entirely
+  const handleStopRec = useCallback(() => {
+    looperRef.current?.stopMasterRecording();
+    stopElapsedTimer();
+    setRecState('idle');
+    setMasterRecordElapsed(0);
+    seqPausePositionRef.current = null;
+  }, [stopElapsedTimer]);
 
   const formatTime = (secs: number): string => {
     const m = Math.floor(secs / 60);
