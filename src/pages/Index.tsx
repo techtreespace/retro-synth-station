@@ -173,25 +173,38 @@ const Index: React.FC = () => {
     setRecState('recording');
   }, [startElapsedTimer]);
 
-  // PREVIEW button from paused → previewing
+  // PREVIEW button from paused/stopped → previewing
   const handlePreview = useCallback(async () => {
     if (!looperRef.current) return;
+    const prevState = recState;
     setRecState('previewing');
     await looperRef.current.previewMasterRecording(() => {
-      // On preview end → back to PAUSED, NOT resume sequencer
-      setRecState('paused');
+      // On preview end → back to previous state, NOT resume sequencer
+      setRecState(prevState === 'stopped' ? 'stopped' : 'paused');
     });
-  }, []);
+  }, [recState]);
 
-  // STOP preview → back to paused
+  // STOP preview
   const handleStopPreview = useCallback(() => {
     looperRef.current?.stopMasterPreview();
-    setRecState('paused');
+    // Go back to paused or stopped depending on where we came from
+    setRecState(prev => prev === 'previewing' ? 'paused' : prev);
   }, []);
 
-  // STOP recording entirely
+  // STOP recording → stopped (keeps data, doesn't download yet)
   const handleStopRec = useCallback(() => {
-    looperRef.current?.stopMasterRecording();
+    if (!looperRef.current) return;
+    looperRef.current.pauseMasterRecording(); // pause, don't finalize
+    stopElapsedTimer();
+    // If currently previewing, stop preview first
+    looperRef.current.stopMasterPreview();
+    setRecState('stopped');
+  }, [stopElapsedTimer]);
+
+  // SAVE → finalize and download
+  const handleSaveRec = useCallback(() => {
+    if (!looperRef.current) return;
+    looperRef.current.stopMasterRecording(); // triggers download
     stopElapsedTimer();
     setRecState('idle');
     setMasterRecordElapsed(0);
