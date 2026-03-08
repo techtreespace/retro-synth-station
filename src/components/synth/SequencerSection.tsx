@@ -104,15 +104,19 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
     } else {
       await ensureSeqInit();
       if (paused) {
-        // Resume from paused position
         seq.start(currentStep);
       } else {
         seq.start(0);
       }
       setPlaying(true);
       setPaused(false);
+      // Report the AudioContext time when sequencer started for loop sync
+      const ctx = synthEngine?.getAudioContext?.();
+      if (ctx) {
+        onStartTimeChange?.(ctx.currentTime);
+      }
     }
-  }, [playing, paused, currentStep, ensureSeqInit]);
+  }, [playing, paused, currentStep, ensureSeqInit, synthEngine, onStartTimeChange]);
 
   const handlePause = useCallback(() => {
     const seq = seqRef.current;
