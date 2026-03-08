@@ -290,13 +290,23 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                       <X className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Volume */}
-                    <div className="ml-auto">
+                    {/* Volume & Start Offset */}
+                    <div className="ml-auto flex items-center gap-1">
+                      <Knob
+                        value={slot.startOffset * 1000}
+                        min={0}
+                        max={500}
+                        step={1}
+                        label="START"
+                        onChange={(v) => handleSlotStartOffset(i, v / 1000)}
+                        size="sm"
+                        formatValue={(v) => `${Math.round(v)}ms`}
+                      />
                       <Knob
                         value={slot.volume}
                         min={0}
                         max={1}
-                        label=""
+                        label="VOL"
                         onChange={(v) => handleSlotVolume(i, v)}
                         size="sm"
                       />
