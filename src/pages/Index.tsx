@@ -44,9 +44,11 @@ const Index: React.FC = () => {
   useEffect(() => {
     engineRef.current = new SynthEngine(params);
     looperRef.current = new LooperEngine();
+    inputRef.current = new AudioInputEngine();
     return () => {
       engineRef.current?.panic();
       looperRef.current?.destroy();
+      inputRef.current?.destroy();
     };
   }, []);
 
