@@ -29,8 +29,7 @@ export class LooperEngine {
   private masterRecording = false;
   private masterRecordStart = 0;
 
-  // Capture node - taps into synth output for recording
-  private captureStreamDest: MediaStreamAudioDestinationNode | null = null;
+  // (captureStreamDest removed — slot recording uses ScriptProcessorNode for raw PCM)
 
   // Metronome
   private metronomeEnabled = false;
