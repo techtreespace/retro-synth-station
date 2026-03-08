@@ -19,6 +19,9 @@ export interface InputState {
   selectedDeviceId: string | null;
   permissionDenied: boolean;
   noDevice: boolean;
+  eqLow: number;      // -12 to +12 dB
+  eqMid: number;
+  eqHigh: number;
 }
 
 type StateCallback = (state: InputState) => void;
@@ -32,6 +35,9 @@ export class AudioInputEngine {
   private stream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private highpassFilter: BiquadFilterNode | null = null;
+  private lowEQ: BiquadFilterNode | null = null;
+  private midEQ: BiquadFilterNode | null = null;
+  private highEQ: BiquadFilterNode | null = null;
   private inputGainNode: GainNode | null = null;
   private muteGainNode: GainNode | null = null;
   private analyser: AnalyserNode | null = null;
@@ -50,6 +56,9 @@ export class AudioInputEngine {
     selectedDeviceId: null,
     permissionDenied: false,
     noDevice: false,
+    eqLow: 0,
+    eqMid: 0,
+    eqHigh: 0,
   };
 
   private onStateChange: StateCallback | null = null;
@@ -119,12 +128,29 @@ export class AudioInputEngine {
       return;
     }
 
-    // Build audio graph: source → highpass → inputGain → muteGain → masterGain
+    // Build audio graph: source → highpass → lowEQ → midEQ → highEQ → inputGain → muteGain → masterGain
     this.sourceNode = this.ctx.createMediaStreamSource(this.stream);
 
     this.highpassFilter = this.ctx.createBiquadFilter();
     this.highpassFilter.type = 'highpass';
     this.highpassFilter.frequency.value = 80;
+
+    // 3-band EQ
+    this.lowEQ = this.ctx.createBiquadFilter();
+    this.lowEQ.type = 'lowshelf';
+    this.lowEQ.frequency.value = 200;
+    this.lowEQ.gain.value = this.state.eqLow;
+
+    this.midEQ = this.ctx.createBiquadFilter();
+    this.midEQ.type = 'peaking';
+    this.midEQ.frequency.value = 1000;
+    this.midEQ.Q.value = 1.0;
+    this.midEQ.gain.value = this.state.eqMid;
+
+    this.highEQ = this.ctx.createBiquadFilter();
+    this.highEQ.type = 'highshelf';
+    this.highEQ.frequency.value = 4000;
+    this.highEQ.gain.value = this.state.eqHigh;
 
     this.inputGainNode = this.ctx.createGain();
     this.inputGainNode.gain.value = this.state.gain;
@@ -140,9 +166,12 @@ export class AudioInputEngine {
     this.monitorGainNode = this.ctx.createGain();
     this.monitorGainNode.gain.value = 0; // off by default
 
-    // Chain
+    // Chain: source → hp → lowEQ → midEQ → highEQ → inputGain → muteGain
     this.sourceNode.connect(this.highpassFilter);
-    this.highpassFilter.connect(this.inputGainNode);
+    this.highpassFilter.connect(this.lowEQ);
+    this.lowEQ.connect(this.midEQ);
+    this.midEQ.connect(this.highEQ);
+    this.highEQ.connect(this.inputGainNode);
     this.inputGainNode.connect(this.muteGainNode);
 
     // Analyser taps after inputGain (before mute) so level shows even when muted
@@ -183,6 +212,9 @@ export class AudioInputEngine {
       this.monitorGainNode?.disconnect();
       this.muteGainNode?.disconnect();
       this.inputGainNode?.disconnect();
+      this.highEQ?.disconnect();
+      this.midEQ?.disconnect();
+      this.lowEQ?.disconnect();
       this.analyser?.disconnect();
       this.highpassFilter?.disconnect();
       this.sourceNode?.disconnect();
@@ -192,6 +224,9 @@ export class AudioInputEngine {
     this.stream = null;
     this.sourceNode = null;
     this.highpassFilter = null;
+    this.lowEQ = null;
+    this.midEQ = null;
+    this.highEQ = null;
     this.inputGainNode = null;
     this.muteGainNode = null;
     this.analyser = null;
@@ -208,6 +243,31 @@ export class AudioInputEngine {
     if (this.inputGainNode) {
       this.inputGainNode.gain.value = this.state.gain;
     }
+    this.emit();
+  }
+
+  setEQ(band: 'low' | 'mid' | 'high', value: number): void {
+    const clamped = Math.max(-12, Math.min(12, value));
+    if (band === 'low') {
+      this.state.eqLow = clamped;
+      if (this.lowEQ) this.lowEQ.gain.value = clamped;
+    } else if (band === 'mid') {
+      this.state.eqMid = clamped;
+      if (this.midEQ) this.midEQ.gain.value = clamped;
+    } else {
+      this.state.eqHigh = clamped;
+      if (this.highEQ) this.highEQ.gain.value = clamped;
+    }
+    this.emit();
+  }
+
+  resetEQ(): void {
+    this.state.eqLow = 0;
+    this.state.eqMid = 0;
+    this.state.eqHigh = 0;
+    if (this.lowEQ) this.lowEQ.gain.value = 0;
+    if (this.midEQ) this.midEQ.gain.value = 0;
+    if (this.highEQ) this.highEQ.gain.value = 0;
     this.emit();
   }
 
