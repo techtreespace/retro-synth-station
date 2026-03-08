@@ -146,6 +146,20 @@ export class LooperEngine {
     osc.stop(time + 0.06);
   }
 
+  /** Count-in click — always plays regardless of metronome setting */
+  private playCountInClick(time: number, isAccent: boolean): void {
+    if (!this.ctx || !this.destination) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain);
+    gain.connect(this.destination);
+    osc.frequency.value = isAccent ? 1200 : 800;
+    gain.gain.setValueAtTime(0.3, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+    osc.start(time);
+    osc.stop(time + 0.06);
+  }
+
   // ─── STATE MACHINE ───────────────────────────────────────────────
 
   /**
@@ -215,20 +229,21 @@ export class LooperEngine {
   private doCountIn(index: number, onComplete: () => void): void {
     if (!this.ctx) return;
     const beatDuration = 60 / this.bpm;
-    const now = this.ctx.currentTime;
+    const startTime = this.ctx.currentTime + 0.1;
     this.slotPendingRecord[index] = true;
 
     for (let i = 0; i < 4; i++) {
-      const clickTime = now + i * beatDuration;
-      this.playMetronomeClick(clickTime, i === 0);
+      const clickTime = startTime + i * beatDuration;
+      this.playCountInClick(clickTime, i === 0);
       const beatNum = i + 1;
       setTimeout(() => {
         this.onCountIn?.(beatNum);
-      }, i * beatDuration * 1000);
+      }, (clickTime - this.ctx!.currentTime) * 1000);
     }
 
     // After 4 beats, start recording
-    const totalDelay = 4 * beatDuration * 1000;
+    const recordStartTime = startTime + 4 * beatDuration;
+    const totalDelay = (recordStartTime - this.ctx.currentTime) * 1000;
     this.slotCountInTimers[index] = window.setTimeout(() => {
       this.slotPendingRecord[index] = false;
       this.onCountIn?.(0); // clear count-in display
@@ -511,6 +526,7 @@ export class LooperEngine {
 
   getAudioContext(): AudioContext | null { return this.ctx; }
   getMasterStreamDest(): MediaStreamAudioDestinationNode | null { return this.masterStreamDest; }
+  isSlotPending(index: number): boolean { return this.slotPendingRecord[index]; }
 
   private getSupportedMimeType(): string {
     const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];

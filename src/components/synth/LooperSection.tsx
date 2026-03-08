@@ -33,7 +33,8 @@ const WaveformDisplay: React.FC<{ data: number[]; mobile?: boolean }> = ({ data,
   );
 };
 
-const stateLabel = (state: SlotState, isOverdub: boolean): string => {
+const stateLabel = (state: SlotState, isOverdub: boolean, isPending: boolean): string => {
+  if (isPending) return 'WAIT...';
   switch (state) {
     case 'empty': return 'EMPTY';
     case 'recording': return isOverdub ? 'ODUB' : 'REC';
@@ -66,6 +67,7 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
   const [syncToBpm, setSyncToBpm] = useState(true);
   const [metronome, setMetronome] = useState(false);
   const [countIn, setCountIn] = useState(0);
+  const [pendingSlots, setPendingSlots] = useState<boolean[]>([false, false, false, false]);
 
   // Sync settings to engine
   useEffect(() => {
@@ -84,6 +86,11 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
       setSlots(prev => {
         const next = [...prev];
         next[index] = slot;
+        return next;
+      });
+      setPendingSlots(prev => {
+        const next = [...prev];
+        next[index] = looperEngine.isSlotPending(index);
         return next;
       });
     });
@@ -208,6 +215,7 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
             {slots.map((slot, i) => {
               const isRecording = slot.state === 'recording';
               const isPlaying = slot.state === 'playing';
+              const isPending = pendingSlots[i];
               
               return (
                 <div
@@ -223,8 +231,8 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                   {/* Slot header */}
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-display text-xs text-led-amber">{i + 1}</span>
-                    <span className={`font-mono-synth text-[8px] tracking-wider ${stateColor(slot.state)}`}>
-                      {stateLabel(slot.state, slot.isOverdub)}
+                    <span className={`font-mono-synth text-[8px] tracking-wider ${isPending ? 'text-led-amber animate-led-pulse' : stateColor(slot.state)}`}>
+                      {stateLabel(slot.state, slot.isOverdub, isPending)}
                     </span>
                   </div>
 
