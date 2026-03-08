@@ -433,6 +433,11 @@ export class LooperEngine {
     }
   }
 
+  setSlotStartOffset(index: number, offset: number): void {
+    this.slots[index].startOffset = Math.max(0, Math.min(0.5, offset));
+    this.emitSlot(index);
+  }
+
   clearSlot(index: number): void {
     this.stopSlotPlayback(index);
     this.cancelRecording(index);
@@ -443,6 +448,8 @@ export class LooperEngine {
       bars: this.slots[index].bars,
       volume: this.slots[index].volume,
       waveformData: [],
+      startOffset: 0,
+      autoTrimOffset: 0,
     };
     this.emitSlot(index);
   }
