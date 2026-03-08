@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { ChevronDown, ChevronRight, Play, Square, Pause } from 'lucide-react';
 import { SequencerEngine, createInitialDrumPattern, createInitialMelodyPattern, DrumPattern, MelodyPattern } from '@/audio/SequencerEngine';
-import { DrumSound, DRUM_SOUNDS } from '@/audio/DrumEngine';
+import { DrumSound, DRUM_SOUNDS, DrumSoundParams, getDefaultDrumParams } from '@/audio/DrumEngine';
 import { SynthEngine } from '@/audio/SynthEngine';
 import DrumGrid from './DrumGrid';
 import MelodySequencer from './MelodySequencer';
@@ -44,6 +44,7 @@ const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProp
     DRUM_SOUNDS.forEach(s => vols[s.id] = 0.8);
     return vols as Record<DrumSound, number>;
   });
+  const [trackParams, setTrackParams] = useState<Record<DrumSound, DrumSoundParams>>(() => getDefaultDrumParams());
   const [tapTimes, setTapTimes] = useState<number[]>([]);
 
   const seqRef = useRef<SequencerEngine | null>(null);
@@ -190,6 +191,11 @@ const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProp
   const handleTrackVolume = useCallback((sound: DrumSound, volume: number) => {
     setTrackVolumes(prev => ({ ...prev, [sound]: volume }));
     seqRef.current?.getDrumEngine().setTrackVolume(sound, volume);
+  }, []);
+
+  const handleTrackParamChange = useCallback((sound: DrumSound, params: DrumSoundParams) => {
+    setTrackParams(prev => ({ ...prev, [sound]: params }));
+    seqRef.current?.getDrumEngine().setSoundParams(sound, params);
   }, []);
 
   const handleToggleMelodyStep = useCallback((step: number) => {
@@ -343,9 +349,11 @@ const SequencerSection = forwardRef<SequencerSectionHandle, SequencerSectionProp
               playing={playing}
               patternLength={patternLength}
               trackVolumes={trackVolumes}
+              trackParams={trackParams}
               onToggleStep={handleToggleDrumStep}
               onToggleMute={handleToggleMute}
               onTrackVolumeChange={handleTrackVolume}
+              onTrackParamChange={handleTrackParamChange}
             />
           </div>
 
