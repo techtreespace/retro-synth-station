@@ -59,13 +59,7 @@ export class LooperEngine {
     this.destination = dest;
     this.synthMasterGain = synthMasterGain || null;
 
-    // Create a capture stream destination that taps the synth output
-    this.captureStreamDest = ctx.createMediaStreamDestination();
-
-    // Connect synth master gain to capture so we can record it
-    if (this.synthMasterGain) {
-      this.synthMasterGain.connect(this.captureStreamDest);
-    }
+    // Slot recording now uses ScriptProcessorNode directly on synthMasterGain
 
     // Create master stream destination for master recording
     this.masterStreamDest = ctx.createMediaStreamDestination();
