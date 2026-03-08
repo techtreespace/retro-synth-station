@@ -242,7 +242,8 @@ export class LooperEngine {
     }
 
     // After 4 beats, start recording
-    const totalDelay = 4 * beatDuration * 1000;
+    const recordStartTime = startTime + 4 * beatDuration;
+    const totalDelay = (recordStartTime - this.ctx.currentTime) * 1000;
     this.slotCountInTimers[index] = window.setTimeout(() => {
       this.slotPendingRecord[index] = false;
       this.onCountIn?.(0); // clear count-in display
