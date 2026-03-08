@@ -88,6 +88,11 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
         next[index] = slot;
         return next;
       });
+      setPendingSlots(prev => {
+        const next = [...prev];
+        next[index] = looperEngine.isSlotPending(index);
+        return next;
+      });
     });
     looperEngine.setOnCountIn((beat) => {
       setCountIn(beat);
