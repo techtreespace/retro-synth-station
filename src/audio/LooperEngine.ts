@@ -550,16 +550,6 @@ export class LooperEngine {
     return mixed;
   }
 
-  private detectLeadingSilence(buffer: AudioBuffer): number {
-    const data = buffer.getChannelData(0);
-    let startSample = 0;
-    const threshold = 0.01;
-    const maxTrim = Math.floor(buffer.sampleRate * 0.2); // 200ms max
-    while (startSample < maxTrim && startSample < data.length && Math.abs(data[startSample]) < threshold) {
-      startSample++;
-    }
-    return startSample / buffer.sampleRate;
-  }
 
   private extractWaveform(buffer: AudioBuffer, bars = 64): number[] {
     const data = buffer.getChannelData(0);

@@ -293,7 +293,7 @@ const LooperSection: React.FC<LooperSectionProps> = ({ looperEngine, bpm, sequen
                     <div className="ml-auto flex items-center gap-1">
                       <Knob
                         value={slot.startOffset * 1000}
-                        min={0}
+                        min={-500}
                         max={500}
                         step={1}
                         label="START"
