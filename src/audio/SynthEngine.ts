@@ -145,6 +145,14 @@ export class SynthEngine {
       voice.filter.frequency.setTargetAtTime(this.params.filterCutoff, now, 0.01);
       voice.filter.Q.setTargetAtTime(this.params.filterResonance, now, 0.01);
       voice.filter.type = this.params.filterType;
+      // Update distortion curve and compensation gain in real time
+      if (voice.waveshaper) {
+        voice.waveshaper.curve = createDistortionCurve(this.params.distortion);
+      }
+      if (voice.distCompGain) {
+        const outputGain = 1.0 - (this.params.distortion / 100) * 0.35;
+        voice.distCompGain.gain.setTargetAtTime(outputGain, now, 0.01);
+      }
     });
   }
 
