@@ -84,6 +84,10 @@ const SequencerSection: React.FC<SequencerSectionProps> = ({ synthEngine, initia
     });
   }, [synthEngine]);
 
+  // Notify parent of playing/bpm changes
+  useEffect(() => { onPlayingChange?.(playing); }, [playing, onPlayingChange]);
+  useEffect(() => { onBpmChange?.(bpm); }, [bpm, onBpmChange]);
+
   const handlePlay = useCallback(async () => {
     const seq = seqRef.current;
     if (!seq) return;
