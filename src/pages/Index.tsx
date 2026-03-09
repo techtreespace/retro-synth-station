@@ -185,6 +185,23 @@ const Index: React.FC = () => {
     startElapsedTimer();
   }, [ensureInit, startElapsedTimer]);
 
+  // Called when REC is clicked in STOPPED state — shows confirmation first
+  const handleNewRecFromStopped = useCallback(() => {
+    setShowNewRecConfirm(true);
+  }, []);
+
+  // Confirmed: discard current and start fresh
+  const handleConfirmNewRec = useCallback(async () => {
+    setShowNewRecConfirm(false);
+    await ensureInit();
+    if (!looperRef.current) return;
+    looperRef.current.discardMasterRecording();
+    looperRef.current.startMasterRecording();
+    setRecState('recording');
+    setMasterRecordElapsed(0);
+    startElapsedTimer();
+  }, [ensureInit, startElapsedTimer]);
+
   const handlePauseRec = useCallback(() => {
     if (!looperRef.current) return;
     looperRef.current.pauseMasterRecording();
@@ -216,7 +233,7 @@ const Index: React.FC = () => {
 
   const handleStopPreview = useCallback(() => {
     looperRef.current?.stopMasterPreview();
-    setRecState(prev => prev === 'previewing' ? 'paused' : prev);
+    setRecState('stopped');
   }, []);
 
   const handleStopRec = useCallback(() => {
