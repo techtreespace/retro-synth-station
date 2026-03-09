@@ -733,6 +733,9 @@ export class LooperEngine {
     if (!this.masterRecording) return 0;
     return (Date.now() - this.masterRecordStart) / 1000;
   }
+  getMasterRecordSize(): number {
+    return this.masterRecordChunks.reduce((sum, chunk) => sum + chunk.size, 0);
+  }
 
   getAudioContext(): AudioContext | null { return this.ctx; }
   getMasterStreamDest(): MediaStreamAudioDestinationNode | null { return this.masterStreamDest; }
