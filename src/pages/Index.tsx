@@ -15,7 +15,8 @@ import SequencerSection, { SequencerSectionHandle } from '@/components/synth/Seq
 import LooperSection from '@/components/synth/LooperSection';
 import InputMixer from '@/components/synth/InputMixer';
 import FxPad from '@/components/synth/FxPad';
-import { Circle, Pause, Play, Square, Download, Settings, ChevronUp, ChevronDown } from 'lucide-react';
+import RecTransport from '@/components/synth/RecTransport';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const SYNTH_TYPES: { value: SynthType; label: string }[] = [
