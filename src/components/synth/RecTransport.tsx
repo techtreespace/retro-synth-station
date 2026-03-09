@@ -222,37 +222,37 @@ const RecTransport: React.FC<RecTransportProps> = ({
   const renderTimeRow = () => {
     switch (recState) {
       case 'idle':
-        return <span className="text-muted-foreground">00:00</span>;
+        return <span className="text-synth-panel-foreground/50">00:00</span>;
       case 'recording':
-        return <span className="text-red-500">● {formatTime(elapsed)}</span>;
+        return <span className="text-led-red">● {formatTime(elapsed)}</span>;
       case 'paused':
-        return <span className="text-amber-500">⏸ {formatTime(elapsed)}</span>;
+        return <span className="text-led-amber">⏸ {formatTime(elapsed)}</span>;
       case 'stopped':
-        return <span className="text-muted-foreground">■ {formatTime(elapsed)} 완료  {formatSize(blobSize)}</span>;
+        return <span className="text-synth-panel-foreground/60">■ {formatTime(elapsed)} 완료  {formatSize(blobSize)}</span>;
       case 'previewing':
-        return <span className="text-amber-500">▶ {formatTime(previewPos)} / {formatTime(elapsed)}</span>;
+        return <span className="text-led-amber">▶ {formatTime(previewPos)} / {formatTime(elapsed)}</span>;
     }
   };
 
-  // Button style helper
+  // Button style helper — uses design tokens only
   const getBtnStyle = (enabled: boolean, variant?: 'rec' | 'del' | 'active-rec' | 'active-preview') => {
     const base = "w-[42px] h-[34px] flex flex-col items-center justify-center gap-[1px] p-0 flex-shrink-0 rounded border transition-opacity duration-150";
 
     if (!enabled) {
-      return `${base} opacity-25 cursor-not-allowed pointer-events-none border-border bg-muted text-muted-foreground`;
+      return `${base} opacity-25 cursor-not-allowed pointer-events-none border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground`;
     }
 
     switch (variant) {
       case 'rec':
-        return `${base} opacity-100 cursor-pointer border-red-500/60 bg-muted text-red-500 hover:bg-red-500/10`;
+        return `${base} opacity-100 cursor-pointer border-led-red/60 bg-synth-surface-dark text-led-red hover:bg-led-red/10`;
       case 'active-rec':
-        return `${base} opacity-100 cursor-pointer border-red-500 bg-red-500/20 text-red-500 animate-pulse`;
+        return `${base} opacity-100 cursor-pointer border-led-red bg-led-red/20 text-led-red animate-pulse`;
       case 'del':
-        return `${base} opacity-100 cursor-pointer border-red-500 bg-muted text-red-500 hover:bg-red-500/10`;
+        return `${base} opacity-100 cursor-pointer border-led-red bg-synth-surface-dark text-led-red hover:bg-led-red/10`;
       case 'active-preview':
-        return `${base} opacity-100 cursor-pointer border-green-500 bg-green-500/20 text-green-500 animate-pulse`;
+        return `${base} opacity-100 cursor-pointer border-led-green bg-led-green/20 text-led-green animate-pulse`;
       default:
-        return `${base} opacity-100 cursor-pointer border-amber-500/60 bg-muted text-amber-500 hover:bg-amber-500/10`;
+        return `${base} opacity-100 cursor-pointer border-led-amber/60 bg-synth-surface-dark text-led-amber hover:bg-led-amber/10`;
     }
   };
 
