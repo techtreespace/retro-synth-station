@@ -294,7 +294,7 @@ const RecTransport: React.FC<RecTransportProps> = ({
             </button>
 
             {showFormatPicker && (
-              <div className="absolute top-full left-0 mt-1 z-50 bg-card border border-border rounded shadow-lg min-w-[140px]">
+              <div className="absolute top-full left-0 mt-1 z-50 bg-synth-surface-dark border border-synth-panel-border rounded shadow-lg min-w-[140px]">
                 {([
                   { value: 'wav' as ExportFormat, label: 'WAV', desc: 'recommended' },
                   { value: 'webm' as ExportFormat, label: 'WEBM', desc: 'smaller file' },
@@ -305,16 +305,16 @@ const RecTransport: React.FC<RecTransportProps> = ({
                     onClick={() => { setExportFormat(f.value); setShowFormatPicker(false); }}
                     className={`w-full text-left px-3 py-2 min-h-[36px] flex items-center gap-2 transition-colors ${
                       exportFormat === f.value
-                        ? 'text-amber-500 bg-amber-500/10'
-                        : 'text-muted-foreground hover:bg-muted'
+                        ? 'text-led-amber bg-led-amber/10'
+                        : 'text-synth-panel-foreground hover:bg-synth-panel-border/30'
                     }`}
                   >
                     <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${
-                      exportFormat === f.value ? 'border-amber-500 bg-amber-500' : 'border-muted-foreground/40'
+                      exportFormat === f.value ? 'border-led-amber bg-led-amber' : 'border-synth-panel-foreground/40'
                     }`} />
                     <div>
-                      <span className="text-[10px] tracking-wider">{f.label}</span>
-                      <span className="text-[8px] ml-1 opacity-50">{f.desc}</span>
+                      <span className="text-[10px] font-display tracking-wider">{f.label}</span>
+                      <span className="text-[8px] font-mono-synth ml-1 opacity-50">{f.desc}</span>
                     </div>
                   </button>
                 ))}
