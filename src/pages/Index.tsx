@@ -58,21 +58,8 @@ const Index: React.FC = () => {
   const [sequencerPlaying, setSequencerPlaying] = useState(false);
   const [sequencerBpm, setSequencerBpm] = useState(120);
 
-  // Persist export format
-  useEffect(() => {
-    localStorage.setItem('retrosynth-export-format', exportFormat);
-  }, [exportFormat]);
 
-  // Close format picker on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (formatPickerRef.current && !formatPickerRef.current.contains(e.target as Node)) {
-        setShowFormatPicker(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+
 
   useEffect(() => {
     engineRef.current = new SynthEngine(params);
