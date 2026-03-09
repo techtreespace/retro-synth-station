@@ -57,10 +57,11 @@ const Index: React.FC = () => {
   const [showFormatPicker, setShowFormatPicker] = useState(false);
   const formatPickerRef = useRef<HTMLDivElement>(null);
 
-  // Master recording state machine: 'idle' | 'recording' | 'paused' | 'previewing'
+  // Master recording state machine: 'idle' | 'recording' | 'paused' | 'stopped' | 'previewing'
   type RecState = 'idle' | 'recording' | 'paused' | 'stopped' | 'previewing';
   const [recState, setRecState] = useState<RecState>('idle');
   const [masterRecordElapsed, setMasterRecordElapsed] = useState(0);
+  const [showNewRecConfirm, setShowNewRecConfirm] = useState(false);
   const recTimerRef = useRef<number | null>(null);
   const seqPausePositionRef = useRef<{ step: number; contextTime: number; bpm: number } | null>(null);
 
