@@ -277,7 +277,12 @@ const Index: React.FC = () => {
           <h1 className="font-display text-[10px] text-led-amber tracking-widest">RETROSYNTH</h1>
         </div>
         <div className="flex items-center gap-1">
-          {renderTransport()}
+          <RecTransport
+            looperRef={looperRef}
+            sequencerRef={sequencerRef}
+            inputRef={inputRef}
+            ensureInit={ensureInit}
+          />
           <button
             onClick={handlePanic}
             className="min-w-[36px] min-h-[36px] rounded font-display text-[8px] tracking-wider border border-led-red bg-led-red/20 text-led-red hover:bg-led-red/40 active:bg-led-red/60 transition-colors flex items-center justify-center p-0 leading-none"
