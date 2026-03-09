@@ -57,10 +57,11 @@ const Index: React.FC = () => {
   const [showFormatPicker, setShowFormatPicker] = useState(false);
   const formatPickerRef = useRef<HTMLDivElement>(null);
 
-  // Master recording state machine: 'idle' | 'recording' | 'paused' | 'previewing'
+  // Master recording state machine: 'idle' | 'recording' | 'paused' | 'stopped' | 'previewing'
   type RecState = 'idle' | 'recording' | 'paused' | 'stopped' | 'previewing';
   const [recState, setRecState] = useState<RecState>('idle');
   const [masterRecordElapsed, setMasterRecordElapsed] = useState(0);
+  const [showNewRecConfirm, setShowNewRecConfirm] = useState(false);
   const recTimerRef = useRef<number | null>(null);
   const seqPausePositionRef = useRef<{ step: number; contextTime: number; bpm: number } | null>(null);
 
@@ -184,6 +185,23 @@ const Index: React.FC = () => {
     startElapsedTimer();
   }, [ensureInit, startElapsedTimer]);
 
+  // Called when REC is clicked in STOPPED state — shows confirmation first
+  const handleNewRecFromStopped = useCallback(() => {
+    setShowNewRecConfirm(true);
+  }, []);
+
+  // Confirmed: discard current and start fresh
+  const handleConfirmNewRec = useCallback(async () => {
+    setShowNewRecConfirm(false);
+    await ensureInit();
+    if (!looperRef.current) return;
+    looperRef.current.discardMasterRecording();
+    looperRef.current.startMasterRecording();
+    setRecState('recording');
+    setMasterRecordElapsed(0);
+    startElapsedTimer();
+  }, [ensureInit, startElapsedTimer]);
+
   const handlePauseRec = useCallback(() => {
     if (!looperRef.current) return;
     looperRef.current.pauseMasterRecording();
@@ -215,7 +233,7 @@ const Index: React.FC = () => {
 
   const handleStopPreview = useCallback(() => {
     looperRef.current?.stopMasterPreview();
-    setRecState(prev => prev === 'previewing' ? 'paused' : prev);
+    setRecState('stopped');
   }, []);
 
   const handleStopRec = useCallback(() => {
@@ -253,7 +271,8 @@ const Index: React.FC = () => {
     const isStopped = recState === 'stopped';
     const isPreviewing = recState === 'previewing';
 
-    const recEnabled = isIdle || isPaused;
+    // Updated: recEnabled includes STOPPED state
+    const recEnabled = isIdle || isPaused || isStopped;
     const pauseEnabled = isRec;
     const stopEnabled = isRec || isPaused || isPreviewing;
     const previewEnabled = isPaused || isStopped;
@@ -264,15 +283,42 @@ const Index: React.FC = () => {
     const btnAvailable = "opacity-100 cursor-pointer border-led-amber/60 bg-synth-surface-dark text-led-amber hover:bg-led-amber/10";
     const btnActive = "opacity-100 border-led-amber bg-led-amber/20 text-led-amber";
 
+    const recClick = isPaused ? handleResumeRec : isStopped ? handleNewRecFromStopped : handleStartRec;
+
     return (
       <div className="flex flex-row gap-1 flex-shrink-0 items-center">
+        {/* Confirmation modal for new recording in STOPPED state */}
+        {showNewRecConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowNewRecConfirm(false)}>
+            <div className="bg-synth-panel border border-synth-panel-border rounded-lg p-5 max-w-[320px] w-full shadow-xl" onClick={e => e.stopPropagation()}>
+              <p className="font-display text-[11px] tracking-wider text-led-amber mb-4">현재 녹음된 내용이 삭제됩니다.<br />새로 녹음하시겠습니까?</p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowNewRecConfirm(false)}
+                  className="px-4 py-2 rounded font-display text-[10px] tracking-wider border border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground hover:border-synth-panel-foreground/40 transition-colors"
+                >취소</button>
+                <button
+                  onClick={handleConfirmNewRec}
+                  className="px-4 py-2 rounded font-display text-[10px] tracking-wider border border-led-red bg-led-red/20 text-led-red hover:bg-led-red/40 transition-colors"
+                >새로 녹음</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* REC */}
         <button
-          onClick={recEnabled ? (isPaused ? handleResumeRec : handleStartRec) : undefined}
-          className={`${btnBase} ${isRec ? `${btnActive} animate-pulse !text-led-red !border-led-red !bg-led-red/20` : recEnabled ? btnAvailable : btnDisabled}`}
+          onClick={recEnabled ? recClick : undefined}
+          className={`${btnBase} ${
+            isRec
+              ? `${btnActive} animate-pulse !text-led-red !border-led-red !bg-led-red/20`
+              : isStopped
+                ? 'opacity-100 cursor-pointer border-dashed border-led-red/70 bg-synth-surface-dark text-led-red hover:bg-led-red/10'
+                : recEnabled ? btnAvailable : btnDisabled
+          }`}
         >
           <Circle className="w-3 h-3" fill={isRec ? 'currentColor' : 'none'} />
-          <span className="text-[7px] tracking-wider leading-none mt-0.5">REC</span>
+          <span className="text-[7px] tracking-wider leading-none mt-0.5">{isStopped ? 'NEW' : 'REC'}</span>
         </button>
 
         {/* PAUSE */}
@@ -350,7 +396,9 @@ const Index: React.FC = () => {
 
         {/* Elapsed time */}
         {(recState === 'recording' || recState === 'paused' || recState === 'stopped') && (
-          <span className="font-mono-synth text-[10px] text-led-amber ml-1">{formatTime(masterRecordElapsed)}</span>
+          <span className={`font-mono-synth text-[10px] ml-1 ${recState === 'recording' ? 'text-led-red' : recState === 'paused' ? 'text-led-amber' : 'text-synth-panel-foreground/60'}`}>
+            {formatTime(masterRecordElapsed)}{recState === 'stopped' ? ' 완료' : ''}
+          </span>
         )}
       </div>
     );

@@ -583,6 +583,19 @@ export class LooperEngine {
     this.masterRecordStart = Date.now() - this.masterPauseElapsed * 1000;
   }
 
+  /** Discard current recording without downloading — resets recorder and chunks */
+  discardMasterRecording(): void {
+    this.stopMasterPreview();
+    if (this.masterRecorder && this.masterRecorder.state !== 'inactive') {
+      this.masterPendingDownload = false;
+      this.masterRecorder.stop();
+    }
+    this.masterRecorder = null;
+    this.masterRecordChunks = [];
+    this.masterRecording = false;
+    this.masterRecordStart = 0;
+  }
+
   stopMasterRecording(format: 'wav' | 'webm' | 'mp4' = 'webm'): void {
     this.stopMasterPreview();
     if (format === 'wav') {
