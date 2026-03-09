@@ -396,7 +396,9 @@ const Index: React.FC = () => {
 
         {/* Elapsed time */}
         {(recState === 'recording' || recState === 'paused' || recState === 'stopped') && (
-          <span className="font-mono-synth text-[10px] text-led-amber ml-1">{formatTime(masterRecordElapsed)}</span>
+          <span className={`font-mono-synth text-[10px] ml-1 ${recState === 'recording' ? 'text-led-red' : recState === 'paused' ? 'text-led-amber' : 'text-synth-panel-foreground/60'}`}>
+            {formatTime(masterRecordElapsed)}{recState === 'stopped' ? ' 완료' : ''}
+          </span>
         )}
       </div>
     );
