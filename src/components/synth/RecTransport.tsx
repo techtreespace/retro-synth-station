@@ -271,7 +271,7 @@ const RecTransport: React.FC<RecTransportProps> = ({
             <AlertDialogCancel className="border-border">취소</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-red-500 text-white hover:bg-red-600"
+              className="bg-led-red text-white hover:bg-led-red/80"
             >
               삭제
             </AlertDialogAction>
