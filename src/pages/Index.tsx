@@ -26,7 +26,7 @@ const SYNTH_TYPES: { value: SynthType; label: string }[] = [
 ];
 
 type MobileTab = 'synth' | 'drum' | 'loop' | 'fx';
-type ExportFormat = 'wav' | 'webm' | 'mp4';
+
 
 const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'synth', label: 'SYNTH' },
