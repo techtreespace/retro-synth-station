@@ -287,7 +287,7 @@ const RecTransport: React.FC<RecTransportProps> = ({
           <div className="relative" ref={formatPickerRef}>
             <button
               onClick={() => setShowFormatPicker(!showFormatPicker)}
-              className="w-[52px] h-[34px] flex flex-col items-center justify-center gap-[1px] p-0 flex-shrink-0 rounded border border-border bg-muted text-muted-foreground hover:border-amber-500/60 hover:text-amber-500 transition-colors cursor-pointer"
+              className="w-[52px] h-[34px] flex flex-col items-center justify-center gap-[1px] p-0 flex-shrink-0 rounded border border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground hover:border-led-amber/60 hover:text-led-amber transition-colors cursor-pointer"
             >
               <Settings className="w-3 h-3" />
               <span className="text-[7px] tracking-wider leading-none">{exportFormat.toUpperCase()}</span>
