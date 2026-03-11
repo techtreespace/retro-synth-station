@@ -271,12 +271,12 @@ const Index: React.FC = () => {
   const renderMobile = () => (
     <>
       {/* Header */}
-      <header className="bg-synth-panel px-1 py-1 border-b-2 border-synth-panel-border overflow-hidden">
-        <div className="flex items-center gap-1 min-w-0">
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <div className="w-2 h-2 rounded-full bg-led-amber animate-led-pulse led-glow-sm" />
-            <h1 className="font-display text-[8px] text-led-amber tracking-widest">RS</h1>
-          </div>
+      <header className="bg-synth-panel px-2 py-1.5 flex items-center justify-between border-b-2 border-synth-panel-border">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-led-amber animate-led-pulse led-glow-sm" />
+          <h1 className="font-display text-[10px] text-led-amber tracking-widest">RETROSYNTH</h1>
+        </div>
+        <div className="flex items-center gap-1">
           <RecTransport
             looperRef={looperRef}
             sequencerRef={sequencerRef}
@@ -285,9 +285,9 @@ const Index: React.FC = () => {
           />
           <button
             onClick={handlePanic}
-            className="min-w-[32px] h-[34px] rounded font-display text-[7px] tracking-wider border border-led-red bg-led-red/20 text-led-red hover:bg-led-red/40 active:bg-led-red/60 transition-colors flex items-center justify-center p-0 leading-none flex-shrink-0"
+            className="min-w-[36px] min-h-[36px] rounded font-display text-[8px] tracking-wider border border-led-red bg-led-red/20 text-led-red hover:bg-led-red/40 active:bg-led-red/60 transition-colors flex items-center justify-center p-0 leading-none"
           >
-            PANIC
+            <span className="block w-full text-center leading-none">PANIC</span>
           </button>
         </div>
       </header>
