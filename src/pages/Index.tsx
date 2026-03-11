@@ -312,12 +312,12 @@ const Index: React.FC = () => {
         ))}
       </div>
 
-      {/* Tab Content */}
-      <div className="flex-1 overflow-auto bg-synth-panel">
-        {activeTab === 'synth' && renderMobileSynth()}
-        {activeTab === 'drum' && renderMobileDrum()}
-        {activeTab === 'loop' && renderMobileLoop()}
-        {activeTab === 'fx' && renderMobileFx()}
+      {/* Tab Content — all tabs always mounted, hidden via CSS to preserve state */}
+      <div className="flex-1 overflow-auto bg-synth-panel relative">
+        <div className={activeTab === 'synth' ? '' : 'hidden'}>{renderMobileSynth()}</div>
+        <div className={activeTab === 'drum' ? '' : 'hidden'}>{renderMobileDrum()}</div>
+        <div className={activeTab === 'loop' ? '' : 'hidden'}>{renderMobileLoop()}</div>
+        <div className={activeTab === 'fx' ? '' : 'hidden'}>{renderMobileFx()}</div>
       </div>
 
       {/* Keyboard — collapsible, sticky bottom */}
