@@ -70,6 +70,11 @@ export class FxEngine {
   private activeNodes: Map<string, { stop: () => void }> = new Map();
 
   init(ctx: AudioContext, destination: AudioNode, recordingDest?: AudioNode | null): void {
+    // Guard: all nodes must belong to the same AudioContext
+    if ((destination as any).context && (destination as any).context !== ctx) return;
+    if (recordingDest && (recordingDest as any).context && (recordingDest as any).context !== ctx) {
+      recordingDest = null;
+    }
     this.ctx = ctx;
     this.fxGain = ctx.createGain();
     this.fxGain.gain.value = 0.7;
