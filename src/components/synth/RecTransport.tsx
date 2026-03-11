@@ -236,7 +236,7 @@ const RecTransport: React.FC<RecTransportProps> = ({
 
   // Button style helper — uses design tokens only
   const getBtnStyle = (enabled: boolean, variant?: 'rec' | 'del' | 'active-rec' | 'active-preview') => {
-    const base = "w-[42px] h-[34px] flex flex-col items-center justify-center gap-[1px] p-0 flex-shrink-0 rounded border transition-opacity duration-150";
+    const base = "w-[36px] h-[32px] flex flex-col items-center justify-center gap-[1px] p-0 flex-shrink-0 rounded border transition-opacity duration-150";
 
     if (!enabled) {
       return `${base} opacity-25 cursor-not-allowed pointer-events-none border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground`;
