@@ -236,7 +236,7 @@ const RecTransport: React.FC<RecTransportProps> = ({
 
   // Button style helper — uses design tokens only
   const getBtnStyle = (enabled: boolean, variant?: 'rec' | 'del' | 'active-rec' | 'active-preview') => {
-    const base = "w-[42px] h-[34px] flex flex-col items-center justify-center gap-[1px] p-0 flex-shrink-0 rounded border transition-opacity duration-150";
+    const base = "w-[36px] h-[32px] flex flex-col items-center justify-center gap-[1px] p-0 flex-shrink-0 rounded border transition-opacity duration-150";
 
     if (!enabled) {
       return `${base} opacity-25 cursor-not-allowed pointer-events-none border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground`;
@@ -282,12 +282,12 @@ const RecTransport: React.FC<RecTransportProps> = ({
       {/* Transport container */}
       <div className="flex flex-col items-end gap-[3px] flex-shrink-0">
         {/* Button row - all 7 buttons always rendered */}
-        <div className="flex flex-row gap-[3px] items-center">
+        <div className="flex flex-row gap-[2px] items-center">
           {/* 1. Format selector (⚙) - always enabled, width 52px */}
           <div className="relative" ref={formatPickerRef}>
             <button
               onClick={() => setShowFormatPicker(!showFormatPicker)}
-              className="w-[52px] h-[34px] flex flex-col items-center justify-center gap-[1px] p-0 flex-shrink-0 rounded border border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground hover:border-led-amber/60 hover:text-led-amber transition-colors cursor-pointer"
+              className="w-[44px] h-[32px] flex flex-col items-center justify-center gap-[1px] p-0 flex-shrink-0 rounded border border-synth-panel-border bg-synth-surface-dark text-synth-panel-foreground hover:border-led-amber/60 hover:text-led-amber transition-colors cursor-pointer"
             >
               <Settings className="w-3 h-3" />
               <span className="text-[7px] tracking-wider leading-none">{exportFormat.toUpperCase()}</span>
