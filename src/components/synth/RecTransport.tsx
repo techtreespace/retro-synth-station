@@ -282,7 +282,7 @@ const RecTransport: React.FC<RecTransportProps> = ({
       {/* Transport container */}
       <div className="flex flex-col items-end gap-[3px] flex-shrink-0">
         {/* Button row - all 7 buttons always rendered */}
-        <div className="flex flex-row gap-[3px] items-center">
+        <div className="flex flex-row gap-[2px] items-center">
           {/* 1. Format selector (⚙) - always enabled, width 52px */}
           <div className="relative" ref={formatPickerRef}>
             <button
