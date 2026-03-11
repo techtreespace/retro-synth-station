@@ -271,7 +271,7 @@ const Index: React.FC = () => {
   const renderMobile = () => (
     <>
       {/* Header */}
-      <header className="bg-synth-panel px-1 py-1 border-b-2 border-synth-panel-border overflow-x-auto">
+      <header className="bg-synth-panel px-1 py-1 border-b-2 border-synth-panel-border overflow-hidden">
         <div className="flex items-center gap-1 min-w-0">
           <div className="flex items-center gap-1 flex-shrink-0">
             <div className="w-2 h-2 rounded-full bg-led-amber animate-led-pulse led-glow-sm" />
