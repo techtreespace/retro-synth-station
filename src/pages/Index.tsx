@@ -253,16 +253,25 @@ const Index: React.FC = () => {
         sequencerPlaying={sequencerPlaying}
       />
 
-      {/* Keyboard - sticky bottom */}
-      <div className="sticky bottom-0 bg-card border-t-2 border-border shadow-lg">
-        <Keyboard
-          octave={octave}
-          onNoteOn={handleNoteOn}
-          onNoteOff={handleNoteOff}
-          onOctaveChange={setOctave}
-          onReleaseAll={handleReleaseAll}
-          activeNotes={activeNotes}
-        />
+      {/* Keyboard - sticky bottom, collapsible */}
+      <div className="sticky bottom-0 z-20 bg-card border-t-2 border-border shadow-lg">
+        <button
+          onClick={() => setKeyboardVisible(v => !v)}
+          className="w-full flex items-center justify-center gap-1 py-1 bg-synth-panel text-synth-panel-foreground/60 text-[9px] font-display tracking-wider hover:text-synth-panel-foreground transition-colors"
+        >
+          {keyboardVisible ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+          {keyboardVisible ? 'HIDE KEYS' : '⌨ SHOW KEYS'}
+        </button>
+        <div className={keyboardVisible ? '' : 'hidden'}>
+          <Keyboard
+            octave={octave}
+            onNoteOn={handleNoteOn}
+            onNoteOff={handleNoteOff}
+            onOctaveChange={setOctave}
+            onReleaseAll={handleReleaseAll}
+            activeNotes={activeNotes}
+          />
+        </div>
       </div>
     </>
   );
