@@ -329,15 +329,16 @@ const Index: React.FC = () => {
         <div className={activeTab === 'fx' ? '' : 'hidden'}>{renderMobileFx()}</div>
       </div>
 
-      {/* Keyboard — collapsible, sticky bottom */}
-      {keyboardVisible ? (
-        <div className="sticky bottom-0 z-20 bg-card border-t-2 border-border shadow-lg">
-          <button
-            onClick={() => setKeyboardVisible(false)}
-            className="w-full flex items-center justify-center gap-1 py-1 bg-synth-panel text-synth-panel-foreground/60 text-[9px] font-display tracking-wider"
-          >
-            <ChevronDown className="w-3 h-3" /> KEYS
-          </button>
+      {/* Keyboard — collapsible, sticky bottom, always mounted */}
+      <div className="sticky bottom-0 z-20 bg-card border-t-2 border-border shadow-lg">
+        <button
+          onClick={() => setKeyboardVisible(v => !v)}
+          className="w-full min-h-[36px] flex items-center justify-center gap-1 py-1 bg-synth-panel text-synth-panel-foreground/60 text-[9px] font-display tracking-wider active:text-synth-panel-foreground transition-colors"
+        >
+          {keyboardVisible ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+          {keyboardVisible ? 'HIDE KEYS' : '⌨ SHOW KEYS'}
+        </button>
+        <div className={keyboardVisible ? '' : 'hidden'}>
           <Keyboard
             octave={octave}
             onNoteOn={handleNoteOn}
@@ -348,14 +349,7 @@ const Index: React.FC = () => {
             mobileMode
           />
         </div>
-      ) : (
-        <button
-          onClick={() => setKeyboardVisible(true)}
-          className="sticky bottom-0 z-20 w-full min-h-[36px] bg-synth-surface-dark border-t border-synth-panel-border flex items-center justify-center gap-1 text-synth-panel-foreground/50 text-[10px] font-display tracking-wider"
-        >
-          <ChevronUp className="w-3 h-3" /> ⌨ TAP TO SHOW KEYS
-        </button>
-      )}
+      </div>
     </>
   );
 
